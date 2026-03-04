@@ -1,0 +1,13 @@
+server:
+  listen: 0.0.0.0:4317
+nats:
+  url: nats://nats:4222
+  stream: OTEL_TELEMETRY
+subjects:
+  traces: otel.traces
+  metrics: otel.metrics
+  logs: otel.logs
+telemetry:
+  otlp_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  service_name: ${OTEL_SERVICE_NAME}
+  resource_attributes: ${OTEL_RESOURCE_ATTRIBUTES}
