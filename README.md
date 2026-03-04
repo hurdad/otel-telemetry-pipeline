@@ -75,3 +75,27 @@ Tables:
 2. Collector exports OTLP gRPC to `otel-otlp-gateway`.
 3. Gateway serializes `Export*ServiceRequest` protobufs and publishes payloads to JetStream subjects.
 4. Loader consumes JetStream records, decodes protobuf payloads, batches rows (50k or 2s), and writes using ClickHouse native protocol.
+
+## Docker Compose full pipeline
+
+A ready-to-run compose stack is provided in `docker-compose.yml` with:
+- OpenTelemetry Collector (`otel-collector`)
+- OTLP Gateway (`otel-otlp-gateway`)
+- NATS JetStream (`nats`)
+- JetStream stream bootstrap job (`jetstream-init`)
+- ClickHouse (`clickhouse`)
+- JetStream loader (`jetstream-clickhouse-loader`)
+
+Start everything:
+
+```bash
+docker compose up --build
+```
+
+Send OTLP data to the collector at:
+- gRPC: `localhost:4317`
+- HTTP: `localhost:4318`
+
+The collector forwards telemetry to the gateway, which publishes to JetStream subjects (`otel.traces`, `otel.metrics`, `otel.logs`).
+
+ClickHouse tables are auto-created from `scripts/clickhouse_schema.sql` at container startup.

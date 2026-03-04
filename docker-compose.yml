@@ -1,0 +1,84 @@
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./scripts/clickhouse_schema.sql:/docker-entrypoint-initdb.d/01-otel-schema.sql:ro
+
+  jetstream-init:
+    image: natsio/nats-box:0.16.0
+    depends_on:
+      - nats
+    restart: "no"
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        until nats --server nats://nats:4222 server ping >/dev/null 2>&1; do
+          sleep 1
+        done
+        nats --server nats://nats:4222 stream add OTEL_TELEMETRY \
+          --subjects "otel.traces,otel.metrics,otel.logs" \
+          --storage file \
+          --retention limits \
+          --max-age 24h \
+          --defaults
+
+  otel-otlp-gateway:
+    build:
+      context: .
+      dockerfile: docker/gateway.Dockerfile
+    depends_on:
+      - nats
+      - jetstream-init
+    ports:
+      - "4317:4317"
+    volumes:
+      - ./configs/gateway.yaml:/etc/otel-pipeline/gateway.yaml:ro
+    environment:
+      NATS_URL: nats://nats:4222
+      GATEWAY_LISTEN_ADDR: 0.0.0.0:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+      OTEL_SERVICE_NAME: otel-otlp-gateway
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=otel-telemetry-pipeline
+
+  jetstream-clickhouse-loader:
+    build:
+      context: .
+      dockerfile: docker/loader.Dockerfile
+    depends_on:
+      - nats
+      - clickhouse
+      - jetstream-init
+    volumes:
+      - ./configs/loader.yaml:/etc/otel-pipeline/loader.yaml:ro
+    environment:
+      NATS_URL: nats://nats:4222
+      NATS_STREAM: OTEL_TELEMETRY
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
+      OTEL_SERVICE_NAME: jetstream-clickhouse-loader
+      OTEL_RESOURCE_ATTRIBUTES: service.namespace=otel-telemetry-pipeline
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    depends_on:
+      - otel-otlp-gateway
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./configs/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"
+      - "8888:8888"
+
+volumes:
+  clickhouse-data:
