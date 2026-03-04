@@ -1,0 +1,22 @@
+#pragma once
+
+#include <chrono>
+#include <memory>
+#include <string>
+
+namespace telemetry {
+
+class ScopedSpan {
+ public:
+  explicit ScopedSpan(std::string name);
+  ~ScopedSpan();
+
+ private:
+  std::string name_;
+  std::chrono::steady_clock::time_point started_at_;
+};
+
+void InitTelemetry();
+std::unique_ptr<ScopedSpan> StartSpan(const std::string& name);
+
+}  // namespace telemetry
