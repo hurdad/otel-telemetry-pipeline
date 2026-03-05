@@ -2,6 +2,18 @@ find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
 find_package(ZLIB REQUIRED)
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/opentelemetry-cpp/CMakeLists.txt")
+  set(WITH_OTLP_GRPC ON CACHE BOOL "Enable OTLP gRPC exporter" FORCE)
+  set(WITH_OTLP_HTTP OFF CACHE BOOL "Disable OTLP HTTP exporter" FORCE)
+  set(WITH_OTLP_FILE OFF CACHE BOOL "Disable OTLP file exporter" FORCE)
+  set(WITH_EXAMPLES OFF CACHE BOOL "Disable OpenTelemetry examples" FORCE)
+  set(WITH_FUNC_TESTS OFF CACHE BOOL "Disable OpenTelemetry functional tests" FORCE)
+  set(BUILD_TESTING OFF CACHE BOOL "Disable OpenTelemetry tests" FORCE)
+  set(WITH_BENCHMARK OFF CACHE BOOL "Disable OpenTelemetry benchmarks" FORCE)
+  add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/opentelemetry-cpp"
+                   third_party/opentelemetry-cpp EXCLUDE_FROM_ALL)
+endif()
+
 set(OTEL_PROTO_ROOT "${CMAKE_SOURCE_DIR}/third_party/opentelemetry-proto")
 file(GLOB_RECURSE OTEL_PROTO_FILES CONFIGURE_DEPENDS
   "${OTEL_PROTO_ROOT}/opentelemetry/proto/*.proto")
