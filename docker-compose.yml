@@ -37,7 +37,7 @@ services:
   otel-otlp-gateway:
     build:
       context: .
-      dockerfile: docker/gateway.Dockerfile
+      dockerfile: Dockerfile
     depends_on:
       - nats
       - jetstream-init
@@ -55,11 +55,12 @@ services:
   jetstream-clickhouse-loader:
     build:
       context: .
-      dockerfile: docker/loader.Dockerfile
+      dockerfile: Dockerfile
     depends_on:
       - nats
       - clickhouse
       - jetstream-init
+    entrypoint: ["/usr/local/bin/jetstream-clickhouse-loader"]
     volumes:
       - ./configs/loader.yaml:/etc/otel-pipeline/loader.yaml:ro
     environment:
