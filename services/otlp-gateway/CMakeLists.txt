@@ -4,7 +4,7 @@ add_executable(otel-otlp-gateway
 
 target_include_directories(otel-otlp-gateway PRIVATE .)
 target_link_libraries(otel-otlp-gateway
-  PRIVATE telemetry jetstream_client otel_proto otel_pipeline_jemalloc)
+  PRIVATE telemetry jetstream_client otel_proto yaml-cpp otel_pipeline_jemalloc)
 
 install(TARGETS otel-otlp-gateway
   RUNTIME DESTINATION bin)

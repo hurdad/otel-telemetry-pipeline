@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libgtest-dev \
     libjemalloc-dev \
+    libyaml-cpp-dev \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 \
     libgcc-s1 \
     libjemalloc2 \
+    libyaml-cpp0.8 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -62,6 +64,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgcc-s1 \
     libjemalloc2 \
     libgrpc++1.51 \
+    libyaml-cpp0.8 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

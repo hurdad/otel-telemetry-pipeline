@@ -9,11 +9,13 @@
 class ClickHouseBatcher {
  public:
   ClickHouseBatcher(const std::string& host = "localhost", uint16_t port = 9000,
-                    const std::string& database = "default")
+                    const std::string& database = "default",
+                    uint32_t max_batch_rows = 50000,
+                    std::chrono::seconds flush_interval = std::chrono::seconds(2))
       : writer_(host, port, database),
-        trace_batch_(50000, std::chrono::seconds(2)),
-        metric_batch_(50000, std::chrono::seconds(2)),
-        log_batch_(50000, std::chrono::seconds(2)) {}
+        trace_batch_(max_batch_rows, flush_interval),
+        metric_batch_(max_batch_rows, flush_interval),
+        log_batch_(max_batch_rows, flush_interval) {}
 
   void ProcessTraces(const std::string& payload) {
     for (auto& row : otlp_decoder::DecodeTraces(payload)) {

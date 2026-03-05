@@ -1,4 +1,5 @@
 #include "clickhouse_batcher.h"
+#include "config.h"
 #include "jetstream_client/jetstream_client.h"
 #include "telemetry/tracer.h"
 
@@ -46,15 +47,25 @@ uint16_t ParsePortOrDefault(const char* key, uint16_t fallback) {
 int main() {
   telemetry::InitTelemetry();
 
-  const std::string nats_url    = GetEnvOrDefault("NATS_URL", "nats://localhost:4222");
-  const std::string nats_stream = GetEnvOrDefault("NATS_STREAM", "OTEL_TELEMETRY");
-  const std::string ch_host     = GetEnvOrDefault("CLICKHOUSE_HOST", "localhost");
-  const uint16_t    ch_port     = ParsePortOrDefault("CLICKHOUSE_PORT", 9000);
-  const std::string ch_database = GetEnvOrDefault("CLICKHOUSE_DATABASE", "default");
+  // Load config file (default path can be overridden via LOADER_CONFIG env var).
+  const std::string config_path =
+      GetEnvOrDefault("LOADER_CONFIG", "/etc/otel-pipeline/loader.yaml");
+  LoaderConfig cfg = LoadConfig(config_path);
 
-  std::clog << "Starting jetstream-clickhouse-loader\n"
-            << "  NATS: " << nats_url << " stream=" << nats_stream << '\n'
-            << "  ClickHouse: " << ch_host << ':' << ch_port << '/' << ch_database << '\n';
+  // Environment variables override config file values when explicitly set.
+  if (const char* v = std::getenv("NATS_URL");         v && v[0]) cfg.nats_url            = v;
+  if (const char* v = std::getenv("NATS_STREAM");      v && v[0]) cfg.nats_stream         = v;
+  if (const char* v = std::getenv("CLICKHOUSE_HOST");  v && v[0]) cfg.clickhouse_host     = v;
+  if (const char* v = std::getenv("CLICKHOUSE_PORT");  v && v[0])
+    cfg.clickhouse_port = static_cast<uint16_t>(ParsePortOrDefault("CLICKHOUSE_PORT", cfg.clickhouse_port));
+  if (const char* v = std::getenv("CLICKHOUSE_DATABASE"); v && v[0]) cfg.clickhouse_database = v;
+
+  std::clog << "Starting jetstream-clickhouse-loader (config=" << config_path << ")\n"
+            << "  NATS: " << cfg.nats_url << " stream=" << cfg.nats_stream << '\n'
+            << "  ClickHouse: " << cfg.clickhouse_host << ':' << cfg.clickhouse_port
+            << '/' << cfg.clickhouse_database << '\n'
+            << "  Batch: max_rows=" << cfg.batch_max_rows
+            << " flush_interval=" << cfg.flush_interval.count() << "s\n";
 
   // Block signals before spawning the consumer thread so they are delivered
   // only to the main thread's sigwait call.
@@ -67,9 +78,11 @@ int main() {
     return 1;
   }
 
-  ClickHouseBatcher batcher(ch_host, ch_port, ch_database);
+  ClickHouseBatcher batcher(cfg.clickhouse_host, cfg.clickhouse_port,
+                             cfg.clickhouse_database,
+                             cfg.batch_max_rows, cfg.flush_interval);
   jetstream_client::JetStreamConsumer consumer(
-      nats_url, nats_stream, {"otel.traces", "otel.metrics", "otel.logs"});
+      cfg.nats_url, cfg.nats_stream, {"otel.traces", "otel.metrics", "otel.logs"});
 
   std::atomic<bool> running{true};
   std::thread consumer_thread([&]() {

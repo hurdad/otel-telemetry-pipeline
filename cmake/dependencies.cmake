@@ -1,6 +1,7 @@
 find_package(Protobuf REQUIRED)
 find_package(gRPC REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/opentelemetry-cpp/CMakeLists.txt")
   set(WITH_OTLP_GRPC ON CACHE BOOL "Enable OTLP gRPC exporter" FORCE)

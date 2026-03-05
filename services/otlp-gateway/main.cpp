@@ -1,3 +1,4 @@
+#include "config.h"
 #include "grpc_server.h"
 
 #include "telemetry/tracer.h"
@@ -24,9 +25,21 @@ std::string GetEnvOrDefault(const char* key, const char* fallback) {
 int main() {
   telemetry::InitTelemetry();
 
-  OtlpGrpcServer server(GetEnvOrDefault("GATEWAY_LISTEN_ADDR", "0.0.0.0:4317"),
-                        GetEnvOrDefault("NATS_URL", "nats://localhost:4222"),
-                        GetEnvOrDefault("NATS_STREAM", "OTEL_TELEMETRY"));
+  // Load config file (default path can be overridden via GATEWAY_CONFIG env var).
+  const std::string config_path =
+      GetEnvOrDefault("GATEWAY_CONFIG", "/etc/otel-pipeline/gateway.yaml");
+  GatewayConfig cfg = LoadConfig(config_path);
+
+  // Environment variables override config file values when explicitly set.
+  if (const char* v = std::getenv("GATEWAY_LISTEN_ADDR"); v && v[0]) cfg.listen_addr = v;
+  if (const char* v = std::getenv("NATS_URL");            v && v[0]) cfg.nats_url    = v;
+  if (const char* v = std::getenv("NATS_STREAM");         v && v[0]) cfg.nats_stream = v;
+
+  std::clog << "Starting otel-otlp-gateway (config=" << config_path << ")\n"
+            << "  Listen: " << cfg.listen_addr << '\n'
+            << "  NATS: " << cfg.nats_url << " stream=" << cfg.nats_stream << '\n';
+
+  OtlpGrpcServer server(cfg.listen_addr, cfg.nats_url, cfg.nats_stream);
 
   // Block signals before spawning the server thread so they are delivered only
   // to the main thread's sigwait call, regardless of which thread they arrive on.
