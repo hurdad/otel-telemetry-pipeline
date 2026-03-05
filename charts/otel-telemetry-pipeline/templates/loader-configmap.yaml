@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "otel-telemetry-pipeline.fullname" . }}-loader-config
+  labels:
+    {{- include "otel-telemetry-pipeline.labels" . | nindent 4 }}
+data:
+  loader.yaml: |
+    nats:
+      url: {{ .Values.nats.url | quote }}
+      stream: {{ .Values.nats.stream | quote }}
+      subjects: [{{ .Values.subjects.traces | quote }}, {{ .Values.subjects.metrics | quote }}, {{ .Values.subjects.logs | quote }}]
+    clickhouse:
+      host: {{ .Values.loader.clickhouse.host | quote }}
+      port: {{ .Values.loader.clickhouse.port }}
+      database: {{ .Values.loader.clickhouse.database | quote }}
+    batch:
+      max_batch_rows: {{ .Values.loader.batch.maxBatchRows }}
+      flush_interval_seconds: {{ .Values.loader.batch.flushIntervalSeconds }}
+    telemetry:
+      otlp_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      service_name: ${OTEL_SERVICE_NAME}
+      resource_attributes: ${OTEL_RESOURCE_ATTRIBUTES}

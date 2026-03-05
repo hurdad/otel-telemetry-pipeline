@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "otel-telemetry-pipeline.fullname" . }}-gateway-config
+  labels:
+    {{- include "otel-telemetry-pipeline.labels" . | nindent 4 }}
+data:
+  gateway.yaml: |
+    server:
+      listen: 0.0.0.0:{{ .Values.gateway.service.port }}
+    nats:
+      url: {{ .Values.nats.url | quote }}
+      stream: {{ .Values.nats.stream | quote }}
+    subjects:
+      traces: {{ .Values.subjects.traces | quote }}
+      metrics: {{ .Values.subjects.metrics | quote }}
+      logs: {{ .Values.subjects.logs | quote }}
+    telemetry:
+      otlp_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      service_name: ${OTEL_SERVICE_NAME}
+      resource_attributes: ${OTEL_RESOURCE_ATTRIBUTES}

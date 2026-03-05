@@ -1,0 +1,52 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+nats:
+  url: nats://nats:4222
+  stream: OTEL_TELEMETRY
+
+subjects:
+  traces: otel.traces
+  metrics: otel.metrics
+  logs: otel.logs
+
+gateway:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/example/otel-otlp-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 4317
+  telemetry:
+    otlpEndpoint: ""
+    serviceName: otel-otlp-gateway
+    resourceAttributes: service.namespace=otel-telemetry-pipeline
+  resources: {}
+
+loader:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/example/jetstream-clickhouse-loader
+    tag: latest
+    pullPolicy: IfNotPresent
+  clickhouse:
+    host: clickhouse
+    port: 9000
+    database: default
+  batch:
+    maxBatchRows: 50000
+    flushIntervalSeconds: 2
+  telemetry:
+    otlpEndpoint: ""
+    serviceName: jetstream-clickhouse-loader
+    resourceAttributes: service.namespace=otel-telemetry-pipeline
+  resources: {}
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

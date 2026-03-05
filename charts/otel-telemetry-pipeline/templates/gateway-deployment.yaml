@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "otel-telemetry-pipeline.fullname" . }}-gateway
+  labels:
+    {{- include "otel-telemetry-pipeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "otel-telemetry-pipeline.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/gateway-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "otel-telemetry-pipeline.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: otel-otlp-gateway
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag }}"
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.gateway.service.port }}
+              protocol: TCP
+          env:
+            - name: NATS_URL
+              value: {{ .Values.nats.url | quote }}
+            - name: GATEWAY_LISTEN_ADDR
+              value: "0.0.0.0:{{ .Values.gateway.service.port }}"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.gateway.telemetry.otlpEndpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.gateway.telemetry.serviceName | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ .Values.gateway.telemetry.resourceAttributes | quote }}
+          volumeMounts:
+            - name: gateway-config
+              mountPath: /etc/otel-pipeline/gateway.yaml
+              subPath: gateway.yaml
+              readOnly: true
+          resources:
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
+      volumes:
+        - name: gateway-config
+          configMap:
+            name: {{ include "otel-telemetry-pipeline.fullname" . }}-gateway-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

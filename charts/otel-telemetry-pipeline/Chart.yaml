@@ -1,0 +1,6 @@
+apiVersion: v2
+name: otel-telemetry-pipeline
+description: Helm chart for deploying the OTEL OTLP gateway and JetStream ClickHouse loader.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

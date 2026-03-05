@@ -1,0 +1,11 @@
+1. OTLP gRPC endpoint:
+  {{- if eq .Values.gateway.service.type "NodePort" }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "otel-telemetry-pipeline.fullname" . }}-gateway)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo ${NODE_IP}:${NODE_PORT}
+  {{- else if eq .Values.gateway.service.type "LoadBalancer" }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  kubectl get svc -n {{ .Release.Namespace }} {{ include "otel-telemetry-pipeline.fullname" . }}-gateway -w
+  {{- else }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "otel-telemetry-pipeline.fullname" . }}-gateway 4317:{{ .Values.gateway.service.port }}
+  {{- end }}

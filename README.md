@@ -131,3 +131,31 @@ Send OTLP data to the collector at:
 The collector forwards telemetry to the gateway, which publishes to JetStream subjects (`otel.traces`, `otel.metrics`, `otel.logs`).
 
 ClickHouse tables are auto-created from `scripts/clickhouse_schema.sql` at container startup.
+
+## Helm chart
+
+A Helm chart is available at `charts/otel-telemetry-pipeline` for deploying:
+- `otel-otlp-gateway`
+- `jetstream-clickhouse-loader`
+
+The chart expects reachable NATS and ClickHouse endpoints (defaults match the compose service hostnames).
+
+Install example:
+
+```bash
+helm upgrade --install otel-pipeline ./charts/otel-telemetry-pipeline \
+  --namespace observability \
+  --create-namespace \
+  --set gateway.image.repository=<your-registry>/otel-otlp-gateway \
+  --set gateway.image.tag=<tag> \
+  --set loader.image.repository=<your-registry>/jetstream-clickhouse-loader \
+  --set loader.image.tag=<tag>
+```
+
+Override connectivity if needed:
+
+```bash
+helm upgrade --install otel-pipeline ./charts/otel-telemetry-pipeline \
+  --set nats.url=nats://nats.my-namespace.svc.cluster.local:4222 \
+  --set loader.clickhouse.host=clickhouse.my-namespace.svc.cluster.local
+```

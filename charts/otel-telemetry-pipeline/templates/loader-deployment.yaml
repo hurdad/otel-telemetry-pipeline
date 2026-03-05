@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "otel-telemetry-pipeline.fullname" . }}-loader
+  labels:
+    {{- include "otel-telemetry-pipeline.labels" . | nindent 4 }}
+    app.kubernetes.io/component: loader
+spec:
+  replicas: {{ .Values.loader.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "otel-telemetry-pipeline.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: loader
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/loader-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "otel-telemetry-pipeline.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: loader
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: jetstream-clickhouse-loader
+          image: "{{ .Values.loader.image.repository }}:{{ .Values.loader.image.tag }}"
+          imagePullPolicy: {{ .Values.loader.image.pullPolicy }}
+          env:
+            - name: NATS_URL
+              value: {{ .Values.nats.url | quote }}
+            - name: NATS_STREAM
+              value: {{ .Values.nats.stream | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.loader.telemetry.otlpEndpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.loader.telemetry.serviceName | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ .Values.loader.telemetry.resourceAttributes | quote }}
+          volumeMounts:
+            - name: loader-config
+              mountPath: /etc/otel-pipeline/loader.yaml
+              subPath: loader.yaml
+              readOnly: true
+          resources:
+            {{- toYaml .Values.loader.resources | nindent 12 }}
+      volumes:
+        - name: loader-config
+          configMap:
+            name: {{ include "otel-telemetry-pipeline.fullname" . }}-loader-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
