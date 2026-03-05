@@ -22,12 +22,22 @@ struct ClickHouseWriter::Impl {
 };
 
 ClickHouseWriter::ClickHouseWriter(std::string host, uint16_t port, std::string database)
-    : host_(std::move(host)), port_(port), database_(std::move(database)),
-      impl_(std::make_unique<Impl>(host_, port_, database_)) {}
+    : host_(std::move(host)), port_(port), database_(std::move(database)) {
+  try {
+    impl_ = std::make_unique<Impl>(host_, port_, database_);
+  } catch (const std::exception& e) {
+    std::clog << "ClickHouse writer init failed host=" << host_ << " port=" << port_
+              << " database=" << database_ << " error=" << e.what() << '\n';
+  }
+}
 
 ClickHouseWriter::~ClickHouseWriter() = default;
 
 void ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows) {
+  if (!impl_) {
+    std::clog << "ClickHouse InsertTraces skipped: writer not initialized\n";
+    return;
+  }
   auto span = telemetry::StartSpan("clickhouse_insert");
   try {
     auto client = impl_->connect();
@@ -67,6 +77,10 @@ void ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& r
 }
 
 void ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>& rows) {
+  if (!impl_) {
+    std::clog << "ClickHouse InsertMetrics skipped: writer not initialized\n";
+    return;
+  }
   auto span = telemetry::StartSpan("clickhouse_insert");
   try {
     auto client = impl_->connect();
@@ -97,6 +111,10 @@ void ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
 }
 
 void ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows) {
+  if (!impl_) {
+    std::clog << "ClickHouse InsertLogs skipped: writer not initialized\n";
+    return;
+  }
   auto span = telemetry::StartSpan("clickhouse_insert");
   try {
     auto client = impl_->connect();
