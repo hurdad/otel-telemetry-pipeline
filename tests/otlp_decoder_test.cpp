@@ -61,6 +61,9 @@ std::string SerializeMetricsRequest(const std::string &service_name,
   for (const auto &metric_name : metric_names) {
     auto *metric = scope_metrics->add_metrics();
     metric->set_name(metric_name);
+    auto *dp = metric->mutable_gauge()->add_data_points();
+    dp->set_time_unix_nano(1000);
+    dp->set_as_double(1.5);
   }
 
   std::string payload;
@@ -123,20 +126,20 @@ TEST(OtlpDecoderTest, DecodeTracesComputesDurationFromStartAndEndTime) {
   EXPECT_EQ(rows[0].operation_name, "operation-1");
 }
 
-TEST(OtlpDecoderTest, DecodeMetricsMapsMetricNamesAndCurrentHardcodedFields) {
+TEST(OtlpDecoderTest, DecodeMetricsMapsMetricNamesAndValues) {
   auto rows = otlp_decoder::DecodeMetrics(
       SerializeMetricsRequest("billing", {"cpu.usage", "memory.usage"}));
 
   ASSERT_EQ(rows.size(), 2);
   EXPECT_EQ(rows[0].service_name, "billing");
   EXPECT_EQ(rows[0].metric_name, "cpu.usage");
-  EXPECT_EQ(rows[0].timestamp_ns, 0u);
-  EXPECT_DOUBLE_EQ(rows[0].value, 0.0);
+  EXPECT_EQ(rows[0].timestamp_ns, 1000u);
+  EXPECT_DOUBLE_EQ(rows[0].value, 1.5);
 
   EXPECT_EQ(rows[1].service_name, "billing");
   EXPECT_EQ(rows[1].metric_name, "memory.usage");
-  EXPECT_EQ(rows[1].timestamp_ns, 0u);
-  EXPECT_DOUBLE_EQ(rows[1].value, 0.0);
+  EXPECT_EQ(rows[1].timestamp_ns, 1000u);
+  EXPECT_DOUBLE_EQ(rows[1].value, 1.5);
 }
 
 TEST(OtlpDecoderTest, DecodeLogsMapsTimestampSeverityAndBodyStringValue) {
