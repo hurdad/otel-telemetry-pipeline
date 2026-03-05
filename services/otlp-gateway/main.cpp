@@ -5,10 +5,11 @@
 
 #include <csignal>
 #include <cstdlib>
-#include <iostream>
 #include <pthread.h>
 #include <string>
 #include <thread>
+
+#include "spdlog/spdlog.h"
 
 namespace {
 
@@ -32,12 +33,12 @@ int main() {
 
   // Environment variables override config file values when explicitly set.
   if (const char* v = std::getenv("GATEWAY_LISTEN_ADDR"); v && v[0]) cfg.listen_addr = v;
-  if (const char* v = std::getenv("NATS_URL");            v && v[0]) cfg.nats_url    = v;
-  if (const char* v = std::getenv("NATS_STREAM");         v && v[0]) cfg.nats_stream = v;
+  if (const char* v = std::getenv("NATS_URL"); v && v[0]) cfg.nats_url = v;
+  if (const char* v = std::getenv("NATS_STREAM"); v && v[0]) cfg.nats_stream = v;
 
-  std::clog << "Starting otel-otlp-gateway (config=" << config_path << ")\n"
-            << "  Listen: " << cfg.listen_addr << '\n'
-            << "  NATS: " << cfg.nats_url << " stream=" << cfg.nats_stream << '\n';
+  spdlog::info("Starting otlp-gateway (config={})", config_path);
+  spdlog::info("  Listen: {}", cfg.listen_addr);
+  spdlog::info("  NATS: {} stream={}", cfg.nats_url, cfg.nats_stream);
 
   OtlpGrpcServer server(cfg.listen_addr, cfg.nats_url, cfg.nats_stream);
 
@@ -48,7 +49,7 @@ int main() {
   sigaddset(&signal_set, SIGINT);
   sigaddset(&signal_set, SIGTERM);
   if (pthread_sigmask(SIG_BLOCK, &signal_set, nullptr) != 0) {
-    std::clog << "Failed to block termination signals, exiting\n";
+    spdlog::error("Failed to block termination signals, exiting");
     return 1;
   }
 
@@ -56,10 +57,10 @@ int main() {
 
   int received_signal = 0;
   if (sigwait(&signal_set, &received_signal) != 0) {
-    std::clog << "sigwait failed, forcing shutdown\n";
+    spdlog::error("sigwait failed, forcing shutdown");
     received_signal = SIGTERM;
   }
-  std::clog << "Received signal " << received_signal << ", shutting down OTLP gateway\n";
+  spdlog::info("Received signal {}, shutting down OTLP gateway", received_signal);
 
   server.Shutdown();
 

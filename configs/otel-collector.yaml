@@ -28,7 +28,7 @@ processors:
 
 exporters:
   otlp:
-    endpoint: otel-otlp-gateway:4317
+    endpoint: otlp-gateway:4317
     tls:
       insecure: true
     compression: gzip

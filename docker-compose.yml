@@ -40,7 +40,7 @@ services:
           --max-age 24h \
           --defaults
 
-  otel-otlp-gateway:
+  otlp-gateway:
     build:
       context: .
       dockerfile: Dockerfile
@@ -54,7 +54,7 @@ services:
       - ./configs/gateway.yaml:/etc/otel-pipeline/gateway.yaml:ro
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
-      OTEL_SERVICE_NAME: otel-otlp-gateway
+      OTEL_SERVICE_NAME: otlp-gateway
       OTEL_RESOURCE_ATTRIBUTES: service.namespace=otel-telemetry-pipeline
 
   jetstream-clickhouse-loader:
@@ -79,7 +79,7 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.104.0
     depends_on:
-      - otel-otlp-gateway
+      - otlp-gateway
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./configs/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro

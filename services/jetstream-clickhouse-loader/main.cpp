@@ -7,11 +7,12 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
-#include <iostream>
 #include <limits>
 #include <pthread.h>
 #include <string>
 #include <thread>
+
+#include "spdlog/spdlog.h"
 
 namespace {
 
@@ -36,8 +37,7 @@ uint16_t ParsePortOrDefault(const char* key, uint16_t fallback) {
     }
     return static_cast<uint16_t>(value);
   } catch (const std::exception& e) {
-    std::clog << "Invalid " << key << "='" << raw << "', using default " << fallback
-              << " error=" << e.what() << '\n';
+    spdlog::warn("Invalid {}='{}', using default {} error={}", key, raw, fallback, e.what());
     return fallback;
   }
 }
@@ -53,21 +53,23 @@ int main() {
   LoaderConfig cfg = LoadConfig(config_path);
 
   // Environment variables override config file values when explicitly set.
-  if (const char* v = std::getenv("NATS_URL");         v && v[0]) cfg.nats_url            = v;
-  if (const char* v = std::getenv("NATS_STREAM");      v && v[0]) cfg.nats_stream         = v;
-  if (const char* v = std::getenv("CLICKHOUSE_HOST");  v && v[0]) cfg.clickhouse_host     = v;
-  if (const char* v = std::getenv("CLICKHOUSE_PORT");  v && v[0])
+  if (const char* v = std::getenv("NATS_URL"); v && v[0]) cfg.nats_url = v;
+  if (const char* v = std::getenv("NATS_STREAM"); v && v[0]) cfg.nats_stream = v;
+  if (const char* v = std::getenv("CLICKHOUSE_HOST"); v && v[0]) cfg.clickhouse_host = v;
+  if (const char* v = std::getenv("CLICKHOUSE_PORT"); v && v[0])
     cfg.clickhouse_port = static_cast<uint16_t>(ParsePortOrDefault("CLICKHOUSE_PORT", cfg.clickhouse_port));
   if (const char* v = std::getenv("CLICKHOUSE_DATABASE"); v && v[0]) cfg.clickhouse_database = v;
-  if (const char* v = std::getenv("CLICKHOUSE_USER");     v && v[0]) cfg.clickhouse_user     = v;
+  if (const char* v = std::getenv("CLICKHOUSE_USER"); v && v[0]) cfg.clickhouse_user = v;
   if (const char* v = std::getenv("CLICKHOUSE_PASSWORD"); v && v[0]) cfg.clickhouse_password = v;
 
-  std::clog << "Starting jetstream-clickhouse-loader (config=" << config_path << ")\n"
-            << "  NATS: " << cfg.nats_url << " stream=" << cfg.nats_stream << '\n'
-            << "  ClickHouse: " << cfg.clickhouse_host << ':' << cfg.clickhouse_port
-            << '/' << cfg.clickhouse_database << " user=" << cfg.clickhouse_user << '\n'
-            << "  Batch: max_rows=" << cfg.batch_max_rows
-            << " flush_interval=" << cfg.flush_interval.count() << "s\n";
+  spdlog::info("Starting jetstream-clickhouse-loader (config={})", config_path);
+  spdlog::info("  NATS: {} stream={}", cfg.nats_url, cfg.nats_stream);
+  spdlog::info("  ClickHouse: {}:{}/{} user={}",
+               cfg.clickhouse_host,
+               cfg.clickhouse_port,
+               cfg.clickhouse_database,
+               cfg.clickhouse_user);
+  spdlog::info("  Batch: max_rows={} flush_interval={}s", cfg.batch_max_rows, cfg.flush_interval.count());
 
   // Block signals before spawning the consumer thread so they are delivered
   // only to the main thread's sigwait call.
@@ -76,14 +78,14 @@ int main() {
   sigaddset(&signal_set, SIGINT);
   sigaddset(&signal_set, SIGTERM);
   if (pthread_sigmask(SIG_BLOCK, &signal_set, nullptr) != 0) {
-    std::clog << "Failed to block termination signals, exiting without graceful shutdown\n";
+    spdlog::error("Failed to block termination signals, exiting without graceful shutdown");
     return 1;
   }
 
   ClickHouseBatcher batcher(cfg.clickhouse_host, cfg.clickhouse_port,
-                             cfg.clickhouse_database,
-                             cfg.clickhouse_user, cfg.clickhouse_password,
-                             cfg.batch_max_rows, cfg.flush_interval);
+                            cfg.clickhouse_database,
+                            cfg.clickhouse_user, cfg.clickhouse_password,
+                            cfg.batch_max_rows, cfg.flush_interval);
   jetstream_client::JetStreamConsumer consumer(
       cfg.nats_url, cfg.nats_stream, {"otel.traces", "otel.metrics", "otel.logs"});
 
@@ -107,10 +109,10 @@ int main() {
 
   int received_signal = 0;
   if (sigwait(&signal_set, &received_signal) != 0) {
-    std::clog << "sigwait failed, forcing shutdown\n";
+    spdlog::error("sigwait failed, forcing shutdown");
     received_signal = SIGTERM;
   }
-  std::clog << "Received signal " << received_signal << ", shutting down loader\n";
+  spdlog::info("Received signal {}, shutting down loader", received_signal);
 
   running.store(false, std::memory_order_relaxed);
   if (consumer_thread.joinable()) {

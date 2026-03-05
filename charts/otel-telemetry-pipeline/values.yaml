@@ -15,7 +15,7 @@ subjects:
 gateway:
   replicaCount: 1
   image:
-    repository: ghcr.io/example/otel-otlp-gateway
+    repository: ghcr.io/example/otlp-gateway
     tag: latest
     pullPolicy: IfNotPresent
   service:
@@ -23,7 +23,7 @@ gateway:
     port: 4317
   telemetry:
     otlpEndpoint: ""
-    serviceName: otel-otlp-gateway
+    serviceName: otlp-gateway
     resourceAttributes: service.namespace=otel-telemetry-pipeline
   resources: {}
 

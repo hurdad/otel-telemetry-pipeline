@@ -1,10 +1,10 @@
-add_executable(otel-otlp-gateway
+add_executable(otlp-gateway
   main.cpp
   grpc_server.cpp)
 
-target_include_directories(otel-otlp-gateway PRIVATE .)
-target_link_libraries(otel-otlp-gateway
+target_include_directories(otlp-gateway PRIVATE .)
+target_link_libraries(otlp-gateway
   PRIVATE telemetry jetstream_client otel_proto yaml-cpp otel_pipeline_jemalloc)
 
-install(TARGETS otel-otlp-gateway
+install(TARGETS otlp-gateway
   RUNTIME DESTINATION bin)

@@ -1,11 +1,11 @@
 #include "telemetry/tracer.h"
 
 #include <cstdlib>
-#include <iostream>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_grpc_exporter_options.h"
@@ -22,6 +22,7 @@
 #include "opentelemetry/sdk/logs/logger_provider.h"
 #include "opentelemetry/sdk/logs/logger_provider_factory.h"
 #include "opentelemetry/sdk/logs/provider.h"
+#include "opentelemetry/sdk/common/global_log_handler.h"
 #include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_factory.h"
 #include "opentelemetry/sdk/metrics/export/periodic_exporting_metric_reader_options.h"
 #include "opentelemetry/sdk/metrics/meter_context_factory.h"
@@ -38,6 +39,12 @@
 #include "opentelemetry/trace/scope.h"
 #include "opentelemetry/trace/span.h"
 
+#include "spdlog/logger.h"
+#include "spdlog/pattern_formatter.h"
+#include "spdlog/sinks/base_sink.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
+#include "spdlog/spdlog.h"
+
 namespace trace_api = opentelemetry::trace;
 namespace trace_sdk = opentelemetry::sdk::trace;
 namespace logs_api = opentelemetry::logs;
@@ -50,6 +57,93 @@ namespace otlp = opentelemetry::exporter::otlp;
 namespace telemetry {
 
 namespace {
+
+class OtlpSpdlogSink final : public spdlog::sinks::base_sink<std::mutex> {
+ public:
+  explicit OtlpSpdlogSink(opentelemetry::nostd::shared_ptr<logs_api::Logger> logger)
+      : logger_(std::move(logger)) {}
+
+ protected:
+  void sink_it_(const spdlog::details::log_msg& msg) override {
+    if (!logger_) {
+      return;
+    }
+
+    static thread_local bool in_export = false;
+    if (in_export) {
+      return;
+    }
+
+    spdlog::memory_buf_t formatted;
+    formatter_->format(msg, formatted);
+    const std::string payload(formatted.data(), formatted.size());
+
+    in_export = true;
+    switch (msg.level) {
+      case spdlog::level::critical:
+      case spdlog::level::err:
+        logger_->Error(payload);
+        break;
+      case spdlog::level::warn:
+        logger_->Warn(payload);
+        break;
+      case spdlog::level::info:
+        logger_->Info(payload);
+        break;
+      case spdlog::level::debug:
+      case spdlog::level::trace:
+        logger_->Debug(payload);
+        break;
+      default:
+        break;
+    }
+    in_export = false;
+  }
+
+  void flush_() override {}
+
+ private:
+  opentelemetry::nostd::shared_ptr<logs_api::Logger> logger_;
+};
+
+class SpdlogOtelInternalLogHandler final : public opentelemetry::sdk::common::internal_log::LogHandler {
+ public:
+  explicit SpdlogOtelInternalLogHandler(std::shared_ptr<spdlog::logger> logger)
+      : logger_(std::move(logger)) {}
+
+  void Handle(opentelemetry::sdk::common::internal_log::LogLevel level,
+              const char* file,
+              int line,
+              const char* msg,
+              const opentelemetry::sdk::common::AttributeMap&) noexcept override {
+    (void)file;
+    if (!logger_) {
+      return;
+    }
+
+    const char* text = msg == nullptr ? "" : msg;
+    switch (level) {
+      case opentelemetry::sdk::common::internal_log::LogLevel::Error:
+        logger_->error("[otel-cpp:{}] {}", line, text);
+        break;
+      case opentelemetry::sdk::common::internal_log::LogLevel::Warning:
+        logger_->warn("[otel-cpp:{}] {}", line, text);
+        break;
+      case opentelemetry::sdk::common::internal_log::LogLevel::Info:
+        logger_->info("[otel-cpp:{}] {}", line, text);
+        break;
+      case opentelemetry::sdk::common::internal_log::LogLevel::Debug:
+        logger_->debug("[otel-cpp:{}] {}", line, text);
+        break;
+      default:
+        logger_->trace("[otel-cpp:{}] {}", line, text);
+        break;
+    }
+  }
+
+ private:
+  std::shared_ptr<spdlog::logger> logger_;
+};
 
 resource_sdk::ResourceAttributes ParseResourceAttributes(const char* raw) {
   resource_sdk::ResourceAttributes out;
@@ -91,7 +185,7 @@ class TelemetryRuntime {
     const std::string resource_attributes = GetEnvOrDefault("OTEL_RESOURCE_ATTRIBUTES", "");
 
     if (endpoint.empty()) {
-      std::clog << "Telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT is empty\n";
+      spdlog::warn("Telemetry disabled: OTEL_EXPORTER_OTLP_ENDPOINT is empty");
       initialized_ = true;
       return;
     }
@@ -109,6 +203,8 @@ class TelemetryRuntime {
     logger_ = logs_api::Provider::GetLoggerProvider()->GetLogger("otel-pipeline-self-logger",
                                                                   "otel-pipeline-self");
 
+    ConfigureSpdlog();
+
     span_counter_ = meter_->CreateUInt64Counter("self_telemetry.spans_total", "spans", "");
     span_duration_ms_ =
         meter_->CreateDoubleHistogram("self_telemetry.span_duration_ms", "ms", "");
@@ -120,9 +216,7 @@ class TelemetryRuntime {
 
     logger_->Info("Self telemetry initialized");
     initialized_ = true;
-
-    std::clog << "Telemetry initialized endpoint=" << endpoint << " service=" << service_name
-              << '\n';
+    spdlog::info("Telemetry initialized endpoint={} service={}", endpoint, service_name);
   }
 
   opentelemetry::nostd::shared_ptr<trace_api::Span> StartSpan(const std::string& name) {
@@ -221,6 +315,29 @@ class TelemetryRuntime {
     logs_sdk::Provider::SetLoggerProvider(api_provider);
   }
 
+  void ConfigureSpdlog() {
+    auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    stdout_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%n] %v");
+
+    auto otlp_sink = std::make_shared<OtlpSpdlogSink>(logger_);
+    otlp_sink->set_pattern("%v");
+
+    std::vector<spdlog::sink_ptr> sinks{stdout_sink, otlp_sink};
+    auto app_logger = std::make_shared<spdlog::logger>("otel-pipeline", sinks.begin(), sinks.end());
+    app_logger->set_level(spdlog::level::info);
+    app_logger->flush_on(spdlog::level::warn);
+    spdlog::set_default_logger(app_logger);
+
+    // Route otel-cpp internal logs to stdout only to prevent recursive log exporting.
+    auto internal_logger = std::make_shared<spdlog::logger>("otel-cpp", stdout_sink);
+    internal_logger->set_level(spdlog::level::warn);
+    auto handler = opentelemetry::nostd::shared_ptr<opentelemetry::sdk::common::internal_log::LogHandler>(
+        new SpdlogOtelInternalLogHandler(internal_logger));
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogHandler(handler);
+    opentelemetry::sdk::common::internal_log::GlobalLogHandler::SetLogLevel(
+        opentelemetry::sdk::common::internal_log::LogLevel::Warning);
+  }
+
   std::mutex mu_;
   bool initialized_ = false;
 
@@ -263,7 +380,7 @@ ScopedSpan::~ScopedSpan() {
   TelemetryRuntime::Instance().RecordSpanMetrics(static_cast<double>(elapsed.count()));
   TelemetryRuntime::Instance().LogSpan(name_, static_cast<uint64_t>(elapsed.count()));
 
-  std::clog << "[span] " << name_ << " duration_ms=" << elapsed.count() << '\n';
+  spdlog::debug("[span] {} duration_ms={}", name_, elapsed.count());
 }
 
 void InitTelemetry() { TelemetryRuntime::Instance().Init(); }
