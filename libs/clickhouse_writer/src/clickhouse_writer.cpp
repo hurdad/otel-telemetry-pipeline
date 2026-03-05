@@ -1,5 +1,6 @@
 #include "clickhouse_writer/clickhouse_writer.h"
 
+#include <cstdint>
 #include <iostream>
 
 #include "clickhouse/client.h"
@@ -37,6 +38,7 @@ ClickHouseWriter::~ClickHouseWriter() = default;
 
 void ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows) {
   if (!impl_) {
+    telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertTraces skipped: writer not initialized\n";
     return;
   }
@@ -150,14 +152,17 @@ void ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& r
     block.AppendColumn("Links.Attributes", link_attributes_col);
 
     client.Insert("otel_traces", block);
+    telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted traces rows=" << rows.size() << '\n';
   } catch (const std::exception& e) {
+    telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertTraces error: " << e.what() << '\n';
   }
 }
 
 void ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>& rows) {
   if (!impl_) {
+    telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertMetrics skipped: writer not initialized\n";
     return;
   }
@@ -248,14 +253,17 @@ void ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
     insert_histogram_or_summary("otel_metrics_exponentialhistogram", exponential_histogram);
     insert_histogram_or_summary("otel_metrics_summary", summary);
 
+    telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted metrics rows=" << rows.size() << '\n';
   } catch (const std::exception& e) {
+    telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertMetrics error: " << e.what() << '\n';
   }
 }
 
 void ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows) {
   if (!impl_) {
+    telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertLogs skipped: writer not initialized\n";
     return;
   }
@@ -331,8 +339,10 @@ void ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows)
     block.AppendColumn("LogAttributes", log_attributes_col);
 
     client.Insert("otel_logs", block);
+    telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted logs rows=" << rows.size() << '\n';
   } catch (const std::exception& e) {
+    telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertLogs error: " << e.what() << '\n';
   }
 }

@@ -112,6 +112,11 @@ class TelemetryRuntime {
     span_counter_ = meter_->CreateUInt64Counter("self_telemetry.spans_total", "spans", "");
     span_duration_ms_ =
         meter_->CreateDoubleHistogram("self_telemetry.span_duration_ms", "ms", "");
+    clickhouse_rows_inserted_counter_ = meter_->CreateUInt64Counter(
+        "self_telemetry.clickhouse_writer.rows_inserted_total", "rows", "");
+    clickhouse_insert_errors_counter_ =
+        meter_->CreateUInt64Counter("self_telemetry.clickhouse_writer.insert_errors_total",
+                                    "errors", "");
 
     logger_->Info("Self telemetry initialized");
     initialized_ = true;
@@ -139,6 +144,18 @@ class TelemetryRuntime {
   void LogSpan(const std::string& name, uint64_t duration_ms) {
     if (logger_) {
       logger_->Debug("span_completed");
+    }
+  }
+
+  void RecordClickHouseRowsInserted(uint64_t rows) {
+    if (clickhouse_rows_inserted_counter_) {
+      clickhouse_rows_inserted_counter_->Add(rows);
+    }
+  }
+
+  void RecordClickHouseInsertError() {
+    if (clickhouse_insert_errors_counter_) {
+      clickhouse_insert_errors_counter_->Add(1);
     }
   }
 
@@ -213,6 +230,8 @@ class TelemetryRuntime {
 
   opentelemetry::nostd::unique_ptr<metrics_api::Counter<uint64_t>> span_counter_;
   opentelemetry::nostd::unique_ptr<metrics_api::Histogram<double>> span_duration_ms_;
+  opentelemetry::nostd::unique_ptr<metrics_api::Counter<uint64_t>> clickhouse_rows_inserted_counter_;
+  opentelemetry::nostd::unique_ptr<metrics_api::Counter<uint64_t>> clickhouse_insert_errors_counter_;
 };
 
 }  // namespace
@@ -247,5 +266,11 @@ void InitTelemetry() { TelemetryRuntime::Instance().Init(); }
 std::unique_ptr<ScopedSpan> StartSpan(const std::string& name) {
   return std::make_unique<ScopedSpan>(name);
 }
+
+void RecordClickHouseRowsInserted(uint64_t rows) {
+  TelemetryRuntime::Instance().RecordClickHouseRowsInserted(rows);
+}
+
+void RecordClickHouseInsertError() { TelemetryRuntime::Instance().RecordClickHouseInsertError(); }
 
 }  // namespace telemetry
