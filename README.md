@@ -1,4 +1,4 @@
-# otel-telemetry-pipeline
+# otel-ingest-pipeline
 
 ## Architecture
 
@@ -34,8 +34,8 @@ The compose stack starts Collector → Gateway → NATS JetStream → Loader →
 
 ## Repository layout
 
-- `services/otlp_gateway`: OTLP ingest gateway implementation.
-- `services/clickhouse_loader`: JetStream-to-ClickHouse loader implementation.
+- `services/otlp-gateway`: OTLP ingest gateway implementation.
+- `services/jetstream-clickhouse-loader`: JetStream-to-ClickHouse loader implementation.
 - `libs/`: shared first-party libraries (serialization, telemetry, common utilities).
 - `configs/`: example runtime configuration for gateway, loader, and collector.
 - `scripts/`: JetStream stream bootstrap and ClickHouse schema SQL.
@@ -50,8 +50,8 @@ cmake --build build -j
 ```
 
 Binaries:
-- `build/services/otlp_gateway/otel-otlp-gateway`
-- `build/services/clickhouse_loader/jetstream-clickhouse-loader`
+- `build/services/otlp-gateway/otel-otlp-gateway`
+- `build/services/jetstream-clickhouse-loader/jetstream-clickhouse-loader`
 
 ## Testing
 
@@ -133,7 +133,7 @@ The repository root `Dockerfile` performs a multi-stage build that:
 Build it with:
 
 ```bash
-docker build -t otel-telemetry-pipeline .
+docker build -t otel-ingest-pipeline .
 ```
 
 Included binaries in the final image:
