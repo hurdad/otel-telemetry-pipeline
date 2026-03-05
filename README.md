@@ -57,6 +57,13 @@ Configuration examples are in `configs/gateway.yaml` and `configs/loader.yaml`.
 - `OTEL_SERVICE_NAME`
 - `OTEL_RESOURCE_ATTRIBUTES`
 
+Both gateway and loader use `libs/telemetry` self-instrumentation built on `opentelemetry-cpp` SDK:
+- traces: internal operation spans (gRPC handling, JetStream operations, ClickHouse writes)
+- metrics: `self_telemetry.spans_total` counter and `self_telemetry.span_duration_ms` histogram
+- logs: structured SDK logs emitted by the telemetry runtime
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is empty, self-telemetry exporters are disabled.
+
 ## JetStream setup
 
 ```bash
