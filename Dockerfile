@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgrpc++-dev \
     zlib1g-dev \
     libgtest-dev \
+    libjemalloc-dev \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,10 +40,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     libstdc++6 \
     libgcc-s1 \
+    libjemalloc2 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/otel/bin/otel-otlp-gateway /usr/local/bin/otel-otlp-gateway
+
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 ENTRYPOINT ["/usr/local/bin/otel-otlp-gateway"]
 
@@ -56,9 +60,12 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 \
     libgcc-s1 \
+    libjemalloc2 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/otel/bin/jetstream-clickhouse-loader /usr/local/bin/jetstream-clickhouse-loader
+
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 ENTRYPOINT ["/usr/local/bin/jetstream-clickhouse-loader"]

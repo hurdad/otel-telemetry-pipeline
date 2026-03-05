@@ -108,6 +108,43 @@ Included binaries in the final image:
 
 By default, the container starts `otel-otlp-gateway`.
 
+
+## Jemalloc support and tuning
+
+The build enables jemalloc by default on Linux via `-DOTEL_PIPELINE_USE_JEMALLOC=ON` and links it into both service binaries (`otel-otlp-gateway`, `jetstream-clickhouse-loader`).
+
+In container images, jemalloc is also configured as a runtime fallback with:
+
+```bash
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
+```
+
+You can tune allocator behavior using `MALLOC_CONF`. Example values:
+
+```bash
+# Lower fragmentation in long-running workloads
+export MALLOC_CONF=background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:1000
+
+# More aggressive page purging under memory pressure
+export MALLOC_CONF=background_thread:true,dirty_decay_ms:250,muzzy_decay_ms:250
+```
+
+Validation checklist:
+
+```bash
+# Verify jemalloc is linked
+ldd /usr/local/bin/otel-otlp-gateway | grep jemalloc
+ldd /usr/local/bin/jetstream-clickhouse-loader | grep jemalloc
+
+# Verify preload fallback is present
+echo "$LD_PRELOAD"
+
+# Optional allocator stats at process exit
+MALLOC_CONF=stats_print:true /usr/local/bin/otel-otlp-gateway --config /etc/otel/gateway.yaml
+```
+
+For before/after memory-pressure comparisons, run the same ingest load profile twice (jemalloc off vs on), then compare RSS/heap metrics and allocator stats output over identical windows.
+
 ## Docker Compose full pipeline
 
 A ready-to-run compose stack is provided in `docker-compose.yml` with:
