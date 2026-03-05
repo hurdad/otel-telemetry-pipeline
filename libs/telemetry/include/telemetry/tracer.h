@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -20,5 +21,7 @@ class ScopedSpan {
 
 void InitTelemetry();
 std::unique_ptr<ScopedSpan> StartSpan(const std::string& name);
+void RecordClickHouseRowsInserted(uint64_t rows);
+void RecordClickHouseInsertError();
 
 }  // namespace telemetry
