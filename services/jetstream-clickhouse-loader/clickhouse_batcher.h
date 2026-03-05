@@ -10,9 +10,11 @@ class ClickHouseBatcher {
  public:
   ClickHouseBatcher(const std::string& host = "localhost", uint16_t port = 9000,
                     const std::string& database = "default",
+                    const std::string& user = "default",
+                    const std::string& password = "",
                     uint32_t max_batch_rows = 50000,
                     std::chrono::seconds flush_interval = std::chrono::seconds(2))
-      : writer_(host, port, database),
+      : writer_(host, port, database, user, password),
         trace_batch_(max_batch_rows, flush_interval),
         metric_batch_(max_batch_rows, flush_interval),
         log_batch_(max_batch_rows, flush_interval) {}

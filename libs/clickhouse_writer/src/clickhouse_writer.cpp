@@ -18,8 +18,10 @@ struct ClickHouseWriter::Impl {
   clickhouse::ClientOptions opts;
   std::unique_ptr<clickhouse::Client> client;
 
-  Impl(const std::string& host, uint16_t port, const std::string& database) {
-    opts.SetHost(host).SetPort(port).SetDefaultDatabase(database);
+  Impl(const std::string& host, uint16_t port, const std::string& database,
+       const std::string& user, const std::string& password) {
+    opts.SetHost(host).SetPort(port).SetDefaultDatabase(database)
+        .SetUser(user).SetPassword(password);
   }
 
   clickhouse::Client& GetClient() {
@@ -32,8 +34,9 @@ struct ClickHouseWriter::Impl {
   void ResetClient() { client.reset(); }
 };
 
-ClickHouseWriter::ClickHouseWriter(std::string host, uint16_t port, std::string database)
-    : impl_(std::make_unique<Impl>(host, port, database)) {}
+ClickHouseWriter::ClickHouseWriter(std::string host, uint16_t port, std::string database,
+                                   std::string user, std::string password)
+    : impl_(std::make_unique<Impl>(host, port, database, user, password)) {}
 
 ClickHouseWriter::~ClickHouseWriter() = default;
 

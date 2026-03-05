@@ -59,11 +59,13 @@ int main() {
   if (const char* v = std::getenv("CLICKHOUSE_PORT");  v && v[0])
     cfg.clickhouse_port = static_cast<uint16_t>(ParsePortOrDefault("CLICKHOUSE_PORT", cfg.clickhouse_port));
   if (const char* v = std::getenv("CLICKHOUSE_DATABASE"); v && v[0]) cfg.clickhouse_database = v;
+  if (const char* v = std::getenv("CLICKHOUSE_USER");     v && v[0]) cfg.clickhouse_user     = v;
+  if (const char* v = std::getenv("CLICKHOUSE_PASSWORD"); v && v[0]) cfg.clickhouse_password = v;
 
   std::clog << "Starting jetstream-clickhouse-loader (config=" << config_path << ")\n"
             << "  NATS: " << cfg.nats_url << " stream=" << cfg.nats_stream << '\n'
             << "  ClickHouse: " << cfg.clickhouse_host << ':' << cfg.clickhouse_port
-            << '/' << cfg.clickhouse_database << '\n'
+            << '/' << cfg.clickhouse_database << " user=" << cfg.clickhouse_user << '\n'
             << "  Batch: max_rows=" << cfg.batch_max_rows
             << " flush_interval=" << cfg.flush_interval.count() << "s\n";
 
@@ -80,6 +82,7 @@ int main() {
 
   ClickHouseBatcher batcher(cfg.clickhouse_host, cfg.clickhouse_port,
                              cfg.clickhouse_database,
+                             cfg.clickhouse_user, cfg.clickhouse_password,
                              cfg.batch_max_rows, cfg.flush_interval);
   jetstream_client::JetStreamConsumer consumer(
       cfg.nats_url, cfg.nats_stream, {"otel.traces", "otel.metrics", "otel.logs"});

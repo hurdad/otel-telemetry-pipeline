@@ -1,25 +1,25 @@
 services:
   nats:
     image: nats:2.10-alpine
-    command: ["-js", "-m", "8222"]
+    command: ["-js", "-m", "8222", "-sd", "/data"]
     ports:
       - "4222:4222"
       - "8222:8222"
+    volumes:
+      - nats-data:/data
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
     ports:
       - "8123:8123"
       - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: otel
+      CLICKHOUSE_USER: otel
+      CLICKHOUSE_PASSWORD: otel
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./scripts/clickhouse_schema.sql:/docker-entrypoint-initdb.d/01-otel-schema.sql:ro
-    healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
   jetstream-init:
     image: natsio/nats-box:0.16.0
@@ -68,7 +68,7 @@ services:
       jetstream-init:
         condition: service_completed_successfully
       clickhouse:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./configs/loader.yaml:/etc/otel-pipeline/loader.yaml:ro
     environment:
@@ -87,4 +87,5 @@ services:
       - "8888:8888"
 
 volumes:
+  nats-data:
   clickhouse-data:

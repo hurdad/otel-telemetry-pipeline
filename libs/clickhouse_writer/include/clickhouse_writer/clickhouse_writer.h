@@ -11,7 +11,8 @@ namespace clickhouse_writer {
 
 class ClickHouseWriter {
  public:
-  ClickHouseWriter(std::string host, uint16_t port, std::string database);
+  ClickHouseWriter(std::string host, uint16_t port, std::string database,
+                   std::string user = "default", std::string password = "");
   ~ClickHouseWriter();
 
   void InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows);

@@ -13,6 +13,8 @@ struct LoaderConfig {
   std::string clickhouse_host     = "localhost";
   uint16_t    clickhouse_port     = 9000;
   std::string clickhouse_database = "default";
+  std::string clickhouse_user     = "default";
+  std::string clickhouse_password = "";
   uint32_t    batch_max_rows      = 50000;
   std::chrono::seconds flush_interval{2};
 };
@@ -30,6 +32,8 @@ inline LoaderConfig LoadConfig(const std::string& path) {
       if (ch["host"])     cfg.clickhouse_host     = ch["host"].as<std::string>();
       if (ch["port"])     cfg.clickhouse_port     = ch["port"].as<uint16_t>();
       if (ch["database"]) cfg.clickhouse_database = ch["database"].as<std::string>();
+      if (ch["user"])     cfg.clickhouse_user     = ch["user"].as<std::string>();
+      if (ch["password"]) cfg.clickhouse_password = ch["password"].as<std::string>();
     }
     if (const auto batch = root["batch"]) {
       if (batch["max_batch_rows"])
