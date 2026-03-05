@@ -5,7 +5,7 @@
 ```text
 OpenTelemetry Collector
         ↓ OTLP gRPC
-otel-otlp-gateway
+otlp-gateway
         ↓
 NATS JetStream
         ↓
@@ -15,7 +15,7 @@ ClickHouse
 ```
 
 The repository contains two C++20 services:
-- `otel-otlp-gateway`: OTLP gRPC ingest service implementing traces/metrics/logs collector APIs.
+- `otlp-gateway`: OTLP gRPC ingest service implementing traces/metrics/logs collector APIs.
 - `jetstream-clickhouse-loader`: JetStream consumer that decodes OTLP protobuf payloads and batches inserts into ClickHouse.
 
 ## Quick start (Docker Compose)
@@ -50,7 +50,7 @@ cmake --build build -j
 ```
 
 Binaries:
-- `build/services/otlp-gateway/otel-otlp-gateway`
+- `build/services/otlp-gateway/otlp-gateway`
 - `build/services/jetstream-clickhouse-loader/jetstream-clickhouse-loader`
 
 ## Testing
@@ -70,7 +70,7 @@ This wires unit-test executables for first-party libraries under `libs/` (and op
 1. Start NATS with JetStream and ClickHouse.
 2. Apply stream and table schema scripts.
 3. Run gateway and loader binaries.
-4. Configure OpenTelemetry Collector to export OTLP to `otel-otlp-gateway:4317`.
+4. Configure OpenTelemetry Collector to export OTLP to `otlp-gateway:4317`.
 
 Configuration examples are in `configs/gateway.yaml` and `configs/loader.yaml`.
 
@@ -118,7 +118,7 @@ Tables:
 ## Example pipeline
 
 1. OpenTelemetry Collector receives app telemetry.
-2. Collector exports OTLP gRPC to `otel-otlp-gateway`.
+2. Collector exports OTLP gRPC to `otlp-gateway`.
 3. Gateway serializes `Export*ServiceRequest` protobufs and publishes payloads to JetStream subjects.
 4. Loader consumes JetStream records, decodes protobuf payloads, batches rows (50k or 2s), and writes using ClickHouse native protocol.
 
@@ -137,15 +137,15 @@ docker build -t otel-ingest-pipeline .
 ```
 
 Included binaries in the final image:
-- `/usr/local/bin/otel-otlp-gateway`
+- `/usr/local/bin/otlp-gateway`
 - `/usr/local/bin/jetstream-clickhouse-loader`
 
-By default, the container starts `otel-otlp-gateway`.
+By default, the container starts `otlp-gateway`.
 
 
 ## Jemalloc support and tuning
 
-The build enables jemalloc by default on Linux via `-DOTEL_PIPELINE_USE_JEMALLOC=ON` and links it into both service binaries (`otel-otlp-gateway`, `jetstream-clickhouse-loader`).
+The build enables jemalloc by default on Linux via `-DOTEL_PIPELINE_USE_JEMALLOC=ON` and links it into both service binaries (`otlp-gateway`, `jetstream-clickhouse-loader`).
 
 In container images, jemalloc is also configured as a runtime fallback with:
 
@@ -167,14 +167,14 @@ Validation checklist:
 
 ```bash
 # Verify jemalloc is linked
-ldd /usr/local/bin/otel-otlp-gateway | grep jemalloc
+ldd /usr/local/bin/otlp-gateway | grep jemalloc
 ldd /usr/local/bin/jetstream-clickhouse-loader | grep jemalloc
 
 # Verify preload fallback is present
 echo "$LD_PRELOAD"
 
 # Optional allocator stats at process exit
-MALLOC_CONF=stats_print:true /usr/local/bin/otel-otlp-gateway --config /etc/otel/gateway.yaml
+MALLOC_CONF=stats_print:true /usr/local/bin/otlp-gateway --config /etc/otel/gateway.yaml
 ```
 
 For before/after memory-pressure comparisons, run the same ingest load profile twice (jemalloc off vs on), then compare RSS/heap metrics and allocator stats output over identical windows.
@@ -183,7 +183,7 @@ For before/after memory-pressure comparisons, run the same ingest load profile t
 
 A ready-to-run compose stack is provided in `docker-compose.yml` with:
 - OpenTelemetry Collector (`otel-collector`)
-- OTLP Gateway (`otel-otlp-gateway`)
+- OTLP Gateway (`otlp-gateway`)
 - NATS JetStream (`nats`)
 - JetStream stream bootstrap job (`jetstream-init`)
 - ClickHouse (`clickhouse`)
@@ -206,7 +206,7 @@ ClickHouse tables are auto-created from `scripts/clickhouse_schema.sql` at conta
 ## Helm chart
 
 A Helm chart is available at `charts/otel-telemetry-pipeline` for deploying:
-- `otel-otlp-gateway`
+- `otlp-gateway`
 - `jetstream-clickhouse-loader`
 
 The chart expects reachable NATS and ClickHouse endpoints (defaults match the compose service hostnames).
@@ -217,7 +217,7 @@ Install example:
 helm upgrade --install otel-pipeline ./charts/otel-telemetry-pipeline \
   --namespace observability \
   --create-namespace \
-  --set gateway.image.repository=<your-registry>/otel-otlp-gateway \
+  --set gateway.image.repository=<your-registry>/otlp-gateway \
   --set gateway.image.tag=<tag> \
   --set loader.image.repository=<your-registry>/jetstream-clickhouse-loader \
   --set loader.image.tag=<tag>

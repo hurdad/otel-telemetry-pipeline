@@ -11,4 +11,5 @@ target_link_libraries(telemetry PUBLIC
   opentelemetry_resources
   opentelemetry_exporter_otlp_grpc
   opentelemetry_exporter_otlp_grpc_log
-  opentelemetry_exporter_otlp_grpc_metrics)
+  opentelemetry_exporter_otlp_grpc_metrics
+  spdlog::spdlog)

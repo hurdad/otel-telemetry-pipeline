@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtest-dev \
     libjemalloc-dev \
     libyaml-cpp-dev \
+    libspdlog-dev \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -43,14 +44,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgcc-s1 \
     libjemalloc2 \
     libyaml-cpp0.8 \
+    libspdlog1.12 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/otel/bin/otel-otlp-gateway /usr/local/bin/otel-otlp-gateway
+COPY --from=builder /opt/otel/bin/otlp-gateway /usr/local/bin/otlp-gateway
 
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
-ENTRYPOINT ["/usr/local/bin/otel-otlp-gateway"]
+ENTRYPOINT ["/usr/local/bin/otlp-gateway"]
 
 # ---------------------------------------------------------------------------
 # Loader runtime
@@ -65,6 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjemalloc2 \
     libgrpc++1.51 \
     libyaml-cpp0.8 \
+    libspdlog1.12 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
