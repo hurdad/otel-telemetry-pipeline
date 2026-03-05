@@ -6,3 +6,6 @@ add_executable(jetstream-clickhouse-loader
 target_include_directories(jetstream-clickhouse-loader PRIVATE .)
 target_link_libraries(jetstream-clickhouse-loader
   PRIVATE telemetry jetstream_client otlp_decoder clickhouse_writer)
+
+install(TARGETS jetstream-clickhouse-loader
+  RUNTIME DESTINATION bin)

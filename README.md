@@ -88,6 +88,26 @@ Tables:
 3. Gateway serializes `Export*ServiceRequest` protobufs and publishes payloads to JetStream subjects.
 4. Loader consumes JetStream records, decodes protobuf payloads, batches rows (50k or 2s), and writes using ClickHouse native protocol.
 
+## Single Docker image build (two-stage)
+
+The repository root `Dockerfile` performs a multi-stage build that:
+- builds both services (with static first-party libraries),
+- runs the CTest suite,
+- installs both binaries,
+- copies only the two installed binaries into the final image and installs only runtime packages (no build/dev packages and no manual shared-library collection step).
+
+Build it with:
+
+```bash
+docker build -t otel-telemetry-pipeline .
+```
+
+Included binaries in the final image:
+- `/usr/local/bin/otel-otlp-gateway`
+- `/usr/local/bin/jetstream-clickhouse-loader`
+
+By default, the container starts `otel-otlp-gateway`.
+
 ## Docker Compose full pipeline
 
 A ready-to-run compose stack is provided in `docker-compose.yml` with:
