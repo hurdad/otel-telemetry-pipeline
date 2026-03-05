@@ -20,10 +20,10 @@ TEST(BatchInsertTest, FlushesWhenMaxRowsReached) {
     flushed_rows = rows.size();
   };
 
-  batcher.Add({1, "t1", "s1", "", "svc", "op", 10}, inserter);
+  batcher.Add(TraceRow{1, "t1", "s1"}, inserter);
   EXPECT_EQ(flush_count, 0);
 
-  batcher.Add({2, "t2", "s2", "", "svc", "op", 20}, inserter);
+  batcher.Add(TraceRow{2, "t2", "s2"}, inserter);
   EXPECT_EQ(flush_count, 1);
   EXPECT_EQ(flushed_rows, 2U);
 }
@@ -38,7 +38,7 @@ TEST(BatchInsertTest, ExplicitFlushWritesPendingRows) {
     flushed_rows = rows.size();
   };
 
-  batcher.Add({1, "t1", "s1", "", "svc", "op", 10}, inserter);
+  batcher.Add(TraceRow{1, "t1", "s1"}, inserter);
   batcher.Flush(inserter);
 
   EXPECT_EQ(flush_count, 1);

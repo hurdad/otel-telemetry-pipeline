@@ -21,8 +21,8 @@ TEST(BatchInsertFocusedTest, CallsInserterWhenMaxRowsReached) {
     snapshots.push_back(rows);
   };
 
-  const TraceRow first{1, "trace-1", "span-1", "", "svc", "op-1", 10};
-  const TraceRow second{2, "trace-2", "span-2", "span-1", "svc", "op-2", 20};
+  const TraceRow first{1, "trace-1", "span-1"};
+  const TraceRow second{2, "trace-2", "span-2"};
 
   batcher.Add(first, inserter);
   EXPECT_EQ(inserter_calls, 0);
@@ -46,7 +46,7 @@ TEST(BatchInsertFocusedTest, FlushCallsInserterOnceAndClearsBuffer) {
     snapshots.push_back(rows);
   };
 
-  const TraceRow pending{3, "trace-3", "span-3", "", "svc", "flush-op", 30};
+  const TraceRow pending{3, "trace-3", "span-3"};
   batcher.Add(pending, inserter);
 
   batcher.Flush(inserter);
@@ -86,8 +86,8 @@ TEST(BatchInsertFocusedTest, AddTriggersFlushWhenIntervalElapsed) {
     snapshots.push_back(rows);
   };
 
-  const TraceRow first{4, "trace-4", "span-4", "", "svc", "timer-op-1", 40};
-  const TraceRow second{5, "trace-5", "span-5", "span-4", "svc", "timer-op-2", 50};
+  const TraceRow first{4, "trace-4", "span-4"};
+  const TraceRow second{5, "trace-5", "span-5"};
 
   batcher.Add(first, inserter);
   EXPECT_EQ(inserter_calls, 0);
