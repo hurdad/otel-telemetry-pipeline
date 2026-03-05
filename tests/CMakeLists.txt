@@ -1,8 +1,12 @@
 find_package(GTest REQUIRED)
 
 add_executable(otlp_decoder_tests
-  otlp_decoder_tests.cpp)
-target_link_libraries(otlp_decoder_tests PRIVATE otlp_decoder GTest::gtest GTest::gtest_main)
+  otlp_decoder_test.cpp)
+target_link_libraries(otlp_decoder_tests PRIVATE
+  otlp_decoder
+  otel_proto
+  GTest::gtest
+  GTest::gtest_main)
 add_test(NAME otlp_decoder_tests COMMAND otlp_decoder_tests)
 
 add_executable(clickhouse_writer_tests
