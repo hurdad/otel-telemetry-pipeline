@@ -31,8 +31,8 @@ add_subdirectory(libs/jetstream_client)
 add_subdirectory(libs/otlp_decoder)
 add_subdirectory(libs/clickhouse_writer)
 
-add_subdirectory(services/otlp_gateway)
-add_subdirectory(services/clickhouse_loader)
+add_subdirectory(services/otlp-gateway)
+add_subdirectory(services/jetstream-clickhouse-loader)
 
 if(OTEL_PIPELINE_BUILD_TESTS)
   set(BUILD_TESTING ON CACHE BOOL "Enable first-party tests" FORCE)
