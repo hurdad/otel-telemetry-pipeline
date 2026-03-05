@@ -26,7 +26,10 @@ RUN cmake -S . -B build \
     && ctest --test-dir build --output-on-failure \
     && cmake --install build
 
-FROM ubuntu:24.04 AS runtime
+# ---------------------------------------------------------------------------
+# Gateway runtime
+# ---------------------------------------------------------------------------
+FROM ubuntu:24.04 AS gateway
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -40,6 +43,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/otel/bin/otel-otlp-gateway /usr/local/bin/otel-otlp-gateway
-COPY --from=builder /opt/otel/bin/jetstream-clickhouse-loader /usr/local/bin/jetstream-clickhouse-loader
 
 ENTRYPOINT ["/usr/local/bin/otel-otlp-gateway"]
+
+# ---------------------------------------------------------------------------
+# Loader runtime
+# ---------------------------------------------------------------------------
+FROM ubuntu:24.04 AS loader
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libstdc++6 \
+    libgcc-s1 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/otel/bin/jetstream-clickhouse-loader /usr/local/bin/jetstream-clickhouse-loader
+
+ENTRYPOINT ["/usr/local/bin/jetstream-clickhouse-loader"]
