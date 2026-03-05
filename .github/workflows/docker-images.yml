@@ -23,9 +23,11 @@ jobs:
       matrix:
         include:
           - image: otel-otlp-gateway
-            dockerfile: docker/gateway.Dockerfile
+            dockerfile: Dockerfile
+            target: gateway
           - image: jetstream-clickhouse-loader
-            dockerfile: docker/loader.Dockerfile
+            dockerfile: Dockerfile
+            target: loader
 
     steps:
       - name: Checkout
@@ -60,6 +62,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
