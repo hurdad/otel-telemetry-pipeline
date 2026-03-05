@@ -173,6 +173,7 @@ class TelemetryRuntime {
   void InitTracing(const std::string& endpoint) {
     otlp::OtlpGrpcExporterOptions options;
     options.endpoint = endpoint;
+    options.use_ssl_credentials = false;
     auto exporter = otlp::OtlpGrpcExporterFactory::Create(options);
     auto processor = trace_sdk::BatchSpanProcessorFactory::Create(
         std::move(exporter), trace_sdk::BatchSpanProcessorOptions{});
@@ -186,6 +187,7 @@ class TelemetryRuntime {
   void InitMetrics(const std::string& endpoint) {
     otlp::OtlpGrpcMetricExporterOptions options;
     options.endpoint = endpoint;
+    options.use_ssl_credentials = false;
     auto exporter = otlp::OtlpGrpcMetricExporterFactory::Create(options);
 
     metrics_sdk::PeriodicExportingMetricReaderOptions reader_options;
@@ -208,6 +210,7 @@ class TelemetryRuntime {
   void InitLogs(const std::string& endpoint) {
     otlp::OtlpGrpcLogRecordExporterOptions options;
     options.endpoint = endpoint;
+    options.use_ssl_credentials = false;
     auto exporter = otlp::OtlpGrpcLogRecordExporterFactory::Create(options);
     auto processor = logs_sdk::BatchLogRecordProcessorFactory::Create(
         std::move(exporter), logs_sdk::BatchLogRecordProcessorOptions{});

@@ -31,6 +31,7 @@ exporters:
     endpoint: otel-otlp-gateway:4317
     tls:
       insecure: true
+    compression: gzip
   debug:
     verbosity: basic
 
