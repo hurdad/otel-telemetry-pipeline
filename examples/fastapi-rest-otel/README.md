@@ -1,6 +1,6 @@
 # FastAPI sample app (OTEL -> Collector)
 
-This sample REST app is instrumented with OpenTelemetry and exports traces over OTLP gRPC.
+This sample REST app is instrumented with OpenTelemetry and exports traces and metrics over OTLP gRPC.
 
 ## Endpoints
 
@@ -21,6 +21,23 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 By default the app exports traces to `http://localhost:4317`.
+
+## Domain metrics
+
+The app publishes a domain metric named `app.items.current`.
+
+- Instrument: `ObservableGauge`
+- Unit: `1`
+- Description: `Current number of items stored in in-memory repository.`
+- Semantics: reports `len(items)` from the in-memory repository at collection time.
+
+Metric export uses OTLP gRPC to the same `OTEL_EXPORTER_OTLP_ENDPOINT` as traces.
+
+Quick verification hint:
+
+1. Start the app and collector/backend pipeline.
+2. Create/delete items using the REST endpoints.
+3. Inspect the collector/backend metrics stream for `app.items.current` rising/falling with repository size.
 
 Set these env vars as needed:
 
