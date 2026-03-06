@@ -45,4 +45,58 @@ TEST(BatchInsertTest, ExplicitFlushWritesPendingRows) {
   EXPECT_EQ(flushed_rows, 1U);
 }
 
+
+TEST(ClickHouseWriterTest, MetricInsertBlocksContainAllSchemaColumns) {
+  EXPECT_EQ(clickhouse_writer::RequiredMetricColumnsForTable("otel_metrics_gauge"),
+            (std::vector<std::string>{"ResourceAttributes", "ResourceSchemaUrl", "ScopeName",
+                                      "ScopeVersion", "ScopeAttributes", "ScopeDroppedAttrCount",
+                                      "ScopeSchemaUrl", "ServiceName", "MetricName",
+                                      "MetricDescription", "MetricUnit", "Attributes",
+                                      "StartTimeUnix", "TimeUnix", "Value", "Flags",
+                                      "Exemplars.FilteredAttributes", "Exemplars.TimeUnix",
+                                      "Exemplars.Value", "Exemplars.SpanId", "Exemplars.TraceId"}));
+
+  EXPECT_EQ(clickhouse_writer::RequiredMetricColumnsForTable("otel_metrics_sum"),
+            (std::vector<std::string>{"ResourceAttributes", "ResourceSchemaUrl", "ScopeName",
+                                      "ScopeVersion", "ScopeAttributes", "ScopeDroppedAttrCount",
+                                      "ScopeSchemaUrl", "ServiceName", "MetricName",
+                                      "MetricDescription", "MetricUnit", "Attributes",
+                                      "StartTimeUnix", "TimeUnix", "Value", "Flags",
+                                      "Exemplars.FilteredAttributes", "Exemplars.TimeUnix",
+                                      "Exemplars.Value", "Exemplars.SpanId", "Exemplars.TraceId",
+                                      "AggregationTemporality", "IsMonotonic"}));
+
+  EXPECT_EQ(clickhouse_writer::RequiredMetricColumnsForTable("otel_metrics_histogram"),
+            (std::vector<std::string>{"ResourceAttributes", "ResourceSchemaUrl", "ScopeName",
+                                      "ScopeVersion", "ScopeAttributes", "ScopeDroppedAttrCount",
+                                      "ScopeSchemaUrl", "ServiceName", "MetricName",
+                                      "MetricDescription", "MetricUnit", "Attributes",
+                                      "StartTimeUnix", "TimeUnix", "Count", "Sum",
+                                      "BucketCounts", "ExplicitBounds",
+                                      "Exemplars.FilteredAttributes", "Exemplars.TimeUnix",
+                                      "Exemplars.Value", "Exemplars.SpanId", "Exemplars.TraceId",
+                                      "Flags", "Min", "Max", "AggregationTemporality"}));
+
+  EXPECT_EQ(clickhouse_writer::RequiredMetricColumnsForTable("otel_metrics_exponentialhistogram"),
+            (std::vector<std::string>{"ResourceAttributes", "ResourceSchemaUrl", "ScopeName",
+                                      "ScopeVersion", "ScopeAttributes", "ScopeDroppedAttrCount",
+                                      "ScopeSchemaUrl", "ServiceName", "MetricName",
+                                      "MetricDescription", "MetricUnit", "Attributes",
+                                      "StartTimeUnix", "TimeUnix", "Count", "Sum", "Scale",
+                                      "ZeroCount", "PositiveOffset", "PositiveBucketCounts",
+                                      "NegativeOffset", "NegativeBucketCounts",
+                                      "Exemplars.FilteredAttributes", "Exemplars.TimeUnix",
+                                      "Exemplars.Value", "Exemplars.SpanId", "Exemplars.TraceId",
+                                      "Flags", "Min", "Max", "AggregationTemporality"}));
+
+  EXPECT_EQ(clickhouse_writer::RequiredMetricColumnsForTable("otel_metrics_summary"),
+            (std::vector<std::string>{"ResourceAttributes", "ResourceSchemaUrl", "ScopeName",
+                                      "ScopeVersion", "ScopeAttributes", "ScopeDroppedAttrCount",
+                                      "ScopeSchemaUrl", "ServiceName", "MetricName",
+                                      "MetricDescription", "MetricUnit", "Attributes",
+                                      "StartTimeUnix", "TimeUnix", "Count", "Sum",
+                                      "ValueAtQuantiles.Quantile", "ValueAtQuantiles.Value",
+                                      "Flags"}));
+}
+
 }  // namespace

@@ -9,6 +9,9 @@
 
 namespace clickhouse_writer {
 
+
+std::vector<std::string> RequiredMetricColumnsForTable(const std::string& table_name);
+
 class ClickHouseWriter {
  public:
   ClickHouseWriter(std::string host, uint16_t port, std::string database,

@@ -192,41 +192,184 @@ std::vector<MetricRow> DecodeMetrics(const std::string& payload) {
   if (!req.ParseFromString(payload)) {
     return {};
   }
+
+  struct ExemplarArrays {
+    std::vector<std::map<std::string, std::string>> filtered_attributes;
+    std::vector<uint64_t> timestamps_ns;
+    std::vector<double> values;
+    std::vector<std::string> span_ids;
+    std::vector<std::string> trace_ids;
+  };
+
+  const auto decode_exemplars = [](const auto& exemplars) {
+    ExemplarArrays arrays;
+    for (const auto& exemplar : exemplars) {
+      arrays.filtered_attributes.push_back(AttributesToMap(exemplar.filtered_attributes()));
+      arrays.timestamps_ns.push_back(static_cast<uint64_t>(exemplar.time_unix_nano()));
+      arrays.values.push_back(exemplar.value_case() == exemplar.kAsInt
+                                  ? static_cast<double>(exemplar.as_int())
+                                  : exemplar.as_double());
+      arrays.span_ids.push_back(BytesToHex(exemplar.span_id()));
+      arrays.trace_ids.push_back(BytesToHex(exemplar.trace_id()));
+    }
+    return arrays;
+  };
+
   using NDP = opentelemetry::proto::metrics::v1::NumberDataPoint;
   std::vector<MetricRow> rows;
   for (const auto& rm : req.resource_metrics()) {
-    std::string service_name = "unknown";
-    for (const auto& attr : rm.resource().attributes()) {
-      if (attr.key() == "service.name") service_name = attr.value().string_value();
-    }
+    const auto resource_attributes = AttributesToMap(rm.resource().attributes());
+    const std::string service_name = ServiceNameFromMap(resource_attributes);
     for (const auto& sm : rm.scope_metrics()) {
+      const auto scope_attributes = AttributesToMap(sm.scope().attributes());
       for (const auto& metric : sm.metrics()) {
-        const auto add = [&](uint64_t ts, double value, uint64_t count, MetricType metric_type) {
-          rows.push_back({ts, service_name, metric.name(), value, count, metric_type});
+        const auto add = [&](MetricRow row) {
+          row.resource_attributes = resource_attributes;
+          row.resource_schema_url = rm.schema_url();
+          row.scope_name = sm.scope().name();
+          row.scope_version = sm.scope().version();
+          row.scope_attributes = scope_attributes;
+          row.scope_dropped_attr_count = sm.scope().dropped_attributes_count();
+          row.scope_schema_url = sm.schema_url();
+          row.service_name = service_name;
+          row.metric_name = metric.name();
+          row.metric_description = metric.description();
+          row.metric_unit = metric.unit();
+          rows.push_back(std::move(row));
         };
         const auto ndp_value = [](const NDP& dp) -> double {
           return dp.value_case() == NDP::kAsInt ? static_cast<double>(dp.as_int())
                                                 : dp.as_double();
         };
+
         if (metric.has_gauge()) {
           for (const auto& dp : metric.gauge().data_points()) {
-            add(dp.time_unix_nano(), ndp_value(dp), 0, MetricType::Gauge);
+            const auto exemplars = decode_exemplars(dp.exemplars());
+            add(MetricRow{
+                .attributes = AttributesToMap(dp.attributes()),
+                .start_timestamp_ns = static_cast<uint64_t>(dp.start_time_unix_nano()),
+                .timestamp_ns = static_cast<uint64_t>(dp.time_unix_nano()),
+                .value = ndp_value(dp),
+                .count = 0,
+                .flags = dp.flags(),
+                .min = 0,
+                .max = 0,
+                .aggregation_temporality = 0,
+                .is_monotonic = false,
+                .exemplar_filtered_attributes = std::move(exemplars.filtered_attributes),
+                .exemplar_timestamps_ns = std::move(exemplars.timestamps_ns),
+                .exemplar_values = std::move(exemplars.values),
+                .exemplar_span_ids = std::move(exemplars.span_ids),
+                .exemplar_trace_ids = std::move(exemplars.trace_ids),
+                .metric_type = MetricType::Gauge,
+            });
           }
         } else if (metric.has_sum()) {
           for (const auto& dp : metric.sum().data_points()) {
-            add(dp.time_unix_nano(), ndp_value(dp), 0, MetricType::Sum);
+            const auto exemplars = decode_exemplars(dp.exemplars());
+            add(MetricRow{
+                .attributes = AttributesToMap(dp.attributes()),
+                .start_timestamp_ns = static_cast<uint64_t>(dp.start_time_unix_nano()),
+                .timestamp_ns = static_cast<uint64_t>(dp.time_unix_nano()),
+                .value = ndp_value(dp),
+                .count = 0,
+                .flags = dp.flags(),
+                .min = 0,
+                .max = 0,
+                .aggregation_temporality = metric.sum().aggregation_temporality(),
+                .is_monotonic = metric.sum().is_monotonic(),
+                .exemplar_filtered_attributes = std::move(exemplars.filtered_attributes),
+                .exemplar_timestamps_ns = std::move(exemplars.timestamps_ns),
+                .exemplar_values = std::move(exemplars.values),
+                .exemplar_span_ids = std::move(exemplars.span_ids),
+                .exemplar_trace_ids = std::move(exemplars.trace_ids),
+                .metric_type = MetricType::Sum,
+            });
           }
         } else if (metric.has_histogram()) {
           for (const auto& dp : metric.histogram().data_points()) {
-            add(dp.time_unix_nano(), dp.sum(), dp.count(), MetricType::Histogram);
+            std::vector<uint64_t> bucket_counts(dp.bucket_counts().begin(), dp.bucket_counts().end());
+            std::vector<double> explicit_bounds(dp.explicit_bounds().begin(),
+                                                dp.explicit_bounds().end());
+            const auto exemplars = decode_exemplars(dp.exemplars());
+            add(MetricRow{
+                .attributes = AttributesToMap(dp.attributes()),
+                .start_timestamp_ns = static_cast<uint64_t>(dp.start_time_unix_nano()),
+                .timestamp_ns = static_cast<uint64_t>(dp.time_unix_nano()),
+                .value = dp.sum(),
+                .count = dp.count(),
+                .bucket_counts = std::move(bucket_counts),
+                .explicit_bounds = std::move(explicit_bounds),
+                .flags = dp.flags(),
+                .min = dp.has_min() ? dp.min() : 0,
+                .max = dp.has_max() ? dp.max() : 0,
+                .aggregation_temporality = metric.histogram().aggregation_temporality(),
+                .is_monotonic = false,
+                .exemplar_filtered_attributes = std::move(exemplars.filtered_attributes),
+                .exemplar_timestamps_ns = std::move(exemplars.timestamps_ns),
+                .exemplar_values = std::move(exemplars.values),
+                .exemplar_span_ids = std::move(exemplars.span_ids),
+                .exemplar_trace_ids = std::move(exemplars.trace_ids),
+                .metric_type = MetricType::Histogram,
+            });
           }
         } else if (metric.has_exponential_histogram()) {
           for (const auto& dp : metric.exponential_histogram().data_points()) {
-            add(dp.time_unix_nano(), dp.sum(), dp.count(), MetricType::ExponentialHistogram);
+            std::vector<uint64_t> positive_bucket_counts(
+                dp.positive().bucket_counts().begin(), dp.positive().bucket_counts().end());
+            std::vector<uint64_t> negative_bucket_counts(
+                dp.negative().bucket_counts().begin(), dp.negative().bucket_counts().end());
+            const auto exemplars = decode_exemplars(dp.exemplars());
+            add(MetricRow{
+                .attributes = AttributesToMap(dp.attributes()),
+                .start_timestamp_ns = static_cast<uint64_t>(dp.start_time_unix_nano()),
+                .timestamp_ns = static_cast<uint64_t>(dp.time_unix_nano()),
+                .value = dp.sum(),
+                .count = dp.count(),
+                .scale = dp.scale(),
+                .zero_count = dp.zero_count(),
+                .positive_offset = dp.positive().offset(),
+                .positive_bucket_counts = std::move(positive_bucket_counts),
+                .negative_offset = dp.negative().offset(),
+                .negative_bucket_counts = std::move(negative_bucket_counts),
+                .flags = dp.flags(),
+                .min = dp.has_min() ? dp.min() : 0,
+                .max = dp.has_max() ? dp.max() : 0,
+                .aggregation_temporality = metric.exponential_histogram().aggregation_temporality(),
+                .is_monotonic = false,
+                .exemplar_filtered_attributes = std::move(exemplars.filtered_attributes),
+                .exemplar_timestamps_ns = std::move(exemplars.timestamps_ns),
+                .exemplar_values = std::move(exemplars.values),
+                .exemplar_span_ids = std::move(exemplars.span_ids),
+                .exemplar_trace_ids = std::move(exemplars.trace_ids),
+                .metric_type = MetricType::ExponentialHistogram,
+            });
           }
         } else if (metric.has_summary()) {
           for (const auto& dp : metric.summary().data_points()) {
-            add(dp.time_unix_nano(), dp.sum(), dp.count(), MetricType::Summary);
+            std::vector<double> quantile_percentages;
+            std::vector<double> quantile_values;
+            quantile_percentages.reserve(dp.quantile_values_size());
+            quantile_values.reserve(dp.quantile_values_size());
+            for (const auto& quantile : dp.quantile_values()) {
+              quantile_percentages.push_back(quantile.quantile());
+              quantile_values.push_back(quantile.value());
+            }
+            add(MetricRow{
+                .attributes = AttributesToMap(dp.attributes()),
+                .start_timestamp_ns = static_cast<uint64_t>(dp.start_time_unix_nano()),
+                .timestamp_ns = static_cast<uint64_t>(dp.time_unix_nano()),
+                .value = dp.sum(),
+                .count = dp.count(),
+                .quantile_values = std::move(quantile_values),
+                .quantile_percentages = std::move(quantile_percentages),
+                .flags = dp.flags(),
+                .min = 0,
+                .max = 0,
+                .aggregation_temporality = 0,
+                .is_monotonic = false,
+                .metric_type = MetricType::Summary,
+            });
           }
         }
       }

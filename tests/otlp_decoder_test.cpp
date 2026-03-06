@@ -76,35 +76,96 @@ std::string SerializeMetricsRequest(const std::string &service_name,
 std::string SerializeMetricsRequestWithMultipleDataPointTypes() {
   opentelemetry::proto::collector::metrics::v1::ExportMetricsServiceRequest req;
   auto *resource_metrics = req.add_resource_metrics();
+  resource_metrics->set_schema_url("resource-schema");
   auto *attribute = resource_metrics->mutable_resource()->add_attributes();
   attribute->set_key("service.name");
   attribute->mutable_value()->set_string_value("analytics");
+  auto *res_region = resource_metrics->mutable_resource()->add_attributes();
+  res_region->set_key("cloud.region");
+  res_region->mutable_value()->set_string_value("us-east-1");
 
   auto *scope_metrics = resource_metrics->add_scope_metrics();
+  scope_metrics->set_schema_url("scope-schema");
+  scope_metrics->mutable_scope()->set_name("scope-a");
+  scope_metrics->mutable_scope()->set_version("v1");
+  scope_metrics->mutable_scope()->set_dropped_attributes_count(4);
+  auto *scope_attr = scope_metrics->mutable_scope()->add_attributes();
+  scope_attr->set_key("library");
+  scope_attr->mutable_value()->set_string_value("core");
 
   auto *gauge_metric = scope_metrics->add_metrics();
   gauge_metric->set_name("requests.inflight");
+  gauge_metric->set_description("inflight requests");
+  gauge_metric->set_unit("1");
   auto *gauge_dp = gauge_metric->mutable_gauge()->add_data_points();
+  gauge_dp->set_start_time_unix_nano(5);
   gauge_dp->set_time_unix_nano(10);
   gauge_dp->set_as_int(7);
+  gauge_dp->set_flags(3);
+  auto *gauge_attr = gauge_dp->add_attributes();
+  gauge_attr->set_key("host.name");
+  gauge_attr->mutable_value()->set_string_value("api-1");
+  auto *gauge_ex = gauge_dp->add_exemplars();
+  gauge_ex->set_time_unix_nano(9);
+  gauge_ex->set_as_double(6.5);
+  gauge_ex->set_span_id("span");
+  gauge_ex->set_trace_id("trace");
 
   auto *sum_metric = scope_metrics->add_metrics();
   sum_metric->set_name("requests.total");
+  sum_metric->set_description("total requests");
+  sum_metric->set_unit("count");
+  sum_metric->mutable_sum()->set_aggregation_temporality(
+      opentelemetry::proto::metrics::v1::AggregationTemporality::AGGREGATION_TEMPORALITY_CUMULATIVE);
+  sum_metric->mutable_sum()->set_is_monotonic(true);
   auto *sum_dp = sum_metric->mutable_sum()->add_data_points();
+  sum_dp->set_start_time_unix_nano(6);
   sum_dp->set_time_unix_nano(11);
   sum_dp->set_as_double(11.5);
 
   auto *histogram_metric = scope_metrics->add_metrics();
   histogram_metric->set_name("latency.histogram");
+  histogram_metric->mutable_histogram()->set_aggregation_temporality(
+      opentelemetry::proto::metrics::v1::AggregationTemporality::AGGREGATION_TEMPORALITY_DELTA);
   auto *histogram_dp = histogram_metric->mutable_histogram()->add_data_points();
+  histogram_dp->set_start_time_unix_nano(7);
   histogram_dp->set_time_unix_nano(12);
+  histogram_dp->set_count(2);
   histogram_dp->set_sum(15.25);
+  histogram_dp->add_bucket_counts(1);
+  histogram_dp->add_bucket_counts(1);
+  histogram_dp->add_explicit_bounds(10.0);
+  histogram_dp->set_min(1.0);
+  histogram_dp->set_max(14.0);
+
+  auto *exp_metric = scope_metrics->add_metrics();
+  exp_metric->set_name("latency.exp");
+  exp_metric->mutable_exponential_histogram()->set_aggregation_temporality(
+      opentelemetry::proto::metrics::v1::AggregationTemporality::AGGREGATION_TEMPORALITY_CUMULATIVE);
+  auto *exp_dp = exp_metric->mutable_exponential_histogram()->add_data_points();
+  exp_dp->set_start_time_unix_nano(8);
+  exp_dp->set_time_unix_nano(13);
+  exp_dp->set_count(3);
+  exp_dp->set_sum(20.0);
+  exp_dp->set_scale(2);
+  exp_dp->set_zero_count(1);
+  exp_dp->mutable_positive()->set_offset(4);
+  exp_dp->mutable_positive()->add_bucket_counts(2);
+  exp_dp->mutable_negative()->set_offset(-2);
+  exp_dp->mutable_negative()->add_bucket_counts(1);
+  exp_dp->set_min(0.5);
+  exp_dp->set_max(18.0);
 
   auto *summary_metric = scope_metrics->add_metrics();
   summary_metric->set_name("latency.summary");
   auto *summary_dp = summary_metric->mutable_summary()->add_data_points();
-  summary_dp->set_time_unix_nano(13);
+  summary_dp->set_start_time_unix_nano(9);
+  summary_dp->set_time_unix_nano(14);
+  summary_dp->set_count(4);
   summary_dp->set_sum(2.5);
+  auto *qv = summary_dp->add_quantile_values();
+  qv->set_quantile(0.5);
+  qv->set_value(2.0);
 
   std::string payload;
   EXPECT_TRUE(req.SerializeToString(&payload));
@@ -209,10 +270,10 @@ TEST(OtlpDecoderTest, DecodeLogsMapsTimestampSeverityAndBodyStringValue) {
 }
 
 
-TEST(OtlpDecoderTest, DecodeMetricsSupportsGaugeSumHistogramAndSummaryDataPoints) {
+TEST(OtlpDecoderTest, DecodeMetricsSupportsAllDataPointTypesAndMetadata) {
   auto rows = otlp_decoder::DecodeMetrics(SerializeMetricsRequestWithMultipleDataPointTypes());
 
-  ASSERT_EQ(rows.size(), 4);
+  ASSERT_EQ(rows.size(), 5);
   EXPECT_EQ(rows[0].service_name, "analytics");
   EXPECT_EQ(rows[0].metric_name, "requests.inflight");
   EXPECT_EQ(rows[0].timestamp_ns, 10u);
@@ -229,10 +290,32 @@ TEST(OtlpDecoderTest, DecodeMetricsSupportsGaugeSumHistogramAndSummaryDataPoints
   EXPECT_DOUBLE_EQ(rows[2].value, 15.25);
   EXPECT_EQ(rows[2].metric_type, otlp_decoder::MetricType::Histogram);
 
-  EXPECT_EQ(rows[3].metric_name, "latency.summary");
+  EXPECT_EQ(rows[2].aggregation_temporality,
+            opentelemetry::proto::metrics::v1::AggregationTemporality::AGGREGATION_TEMPORALITY_DELTA);
+
+  EXPECT_EQ(rows[3].metric_name, "latency.exp");
   EXPECT_EQ(rows[3].timestamp_ns, 13u);
-  EXPECT_DOUBLE_EQ(rows[3].value, 2.5);
-  EXPECT_EQ(rows[3].metric_type, otlp_decoder::MetricType::Summary);
+  EXPECT_EQ(rows[3].scale, 2);
+  EXPECT_EQ(rows[3].positive_offset, 4);
+  EXPECT_EQ(rows[3].negative_offset, -2);
+  EXPECT_EQ(rows[3].metric_type, otlp_decoder::MetricType::ExponentialHistogram);
+
+  EXPECT_EQ(rows[4].metric_name, "latency.summary");
+  EXPECT_EQ(rows[4].timestamp_ns, 14u);
+  EXPECT_DOUBLE_EQ(rows[4].value, 2.5);
+  EXPECT_EQ(rows[4].quantile_percentages[0], 0.5);
+  EXPECT_EQ(rows[4].quantile_values[0], 2.0);
+  EXPECT_EQ(rows[4].metric_type, otlp_decoder::MetricType::Summary);
+
+  EXPECT_EQ(rows[0].resource_schema_url, "resource-schema");
+  EXPECT_EQ(rows[0].scope_schema_url, "scope-schema");
+  EXPECT_EQ(rows[0].scope_name, "scope-a");
+  EXPECT_EQ(rows[0].scope_version, "v1");
+  EXPECT_EQ(rows[0].scope_dropped_attr_count, 4u);
+  EXPECT_EQ(rows[0].metric_description, "inflight requests");
+  EXPECT_EQ(rows[0].metric_unit, "1");
+  EXPECT_EQ(rows[0].attributes.at("host.name"), "api-1");
+  EXPECT_EQ(rows[0].exemplar_timestamps_ns[0], 9u);
 }
 
 TEST(OtlpDecoderTest, DecodeLogsUsesEmptyBodyForNonStringValueTypes) {
