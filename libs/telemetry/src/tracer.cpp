@@ -79,6 +79,12 @@ class OtlpSpdlogSink final : public spdlog::sinks::base_sink<std::mutex> {
     const std::string payload(formatted.data(), formatted.size());
 
     in_export = true;
+    // RAII guard ensures in_export is reset even if the logger throws.
+    struct InExportGuard {
+      bool& flag;
+      ~InExportGuard() { flag = false; }
+    } guard{in_export};
+
     switch (msg.level) {
       case spdlog::level::critical:
       case spdlog::level::err:
@@ -97,7 +103,6 @@ class OtlpSpdlogSink final : public spdlog::sinks::base_sink<std::mutex> {
       default:
         break;
     }
-    in_export = false;
   }
 
   void flush_() override {}
@@ -190,13 +195,19 @@ class TelemetryRuntime {
       return;
     }
 
+    // Honour OTEL_EXPORTER_OTLP_INSECURE=true/1 to disable TLS.
+    const char* insecure_env = std::getenv("OTEL_EXPORTER_OTLP_INSECURE");
+    const bool use_ssl = !(insecure_env &&
+                           (std::string_view(insecure_env) == "true" ||
+                            std::string_view(insecure_env) == "1"));
+
     auto resource_kvs = ParseResourceAttributes(resource_attributes.c_str());
     resource_kvs["service.name"] = service_name;
     resource_ = resource_sdk::Resource::Create(resource_kvs);
 
-    InitTracing(endpoint);
-    InitMetrics(endpoint);
-    InitLogs(endpoint);
+    InitTracing(endpoint, use_ssl);
+    InitMetrics(endpoint, use_ssl);
+    InitLogs(endpoint, use_ssl);
 
     tracer_ = trace_api::Provider::GetTracerProvider()->GetTracer("otel-pipeline-self", "1.0.0");
     meter_ = metrics_api::Provider::GetMeterProvider()->GetMeter("otel-pipeline-self", "1.0.0");
@@ -264,10 +275,10 @@ class TelemetryRuntime {
     return value;
   }
 
-  void InitTracing(const std::string& endpoint) {
+  void InitTracing(const std::string& endpoint, bool use_ssl) {
     otlp::OtlpGrpcExporterOptions options;
     options.endpoint = endpoint;
-    options.use_ssl_credentials = false;
+    options.use_ssl_credentials = use_ssl;
     auto exporter = otlp::OtlpGrpcExporterFactory::Create(options);
     auto processor = trace_sdk::BatchSpanProcessorFactory::Create(
         std::move(exporter), trace_sdk::BatchSpanProcessorOptions{});
@@ -278,10 +289,10 @@ class TelemetryRuntime {
     trace_sdk::Provider::SetTracerProvider(api_provider);
   }
 
-  void InitMetrics(const std::string& endpoint) {
+  void InitMetrics(const std::string& endpoint, bool use_ssl) {
     otlp::OtlpGrpcMetricExporterOptions options;
     options.endpoint = endpoint;
-    options.use_ssl_credentials = false;
+    options.use_ssl_credentials = use_ssl;
     auto exporter = otlp::OtlpGrpcMetricExporterFactory::Create(options);
 
     metrics_sdk::PeriodicExportingMetricReaderOptions reader_options;
@@ -301,10 +312,10 @@ class TelemetryRuntime {
     metrics_sdk::Provider::SetMeterProvider(api_provider);
   }
 
-  void InitLogs(const std::string& endpoint) {
+  void InitLogs(const std::string& endpoint, bool use_ssl) {
     otlp::OtlpGrpcLogRecordExporterOptions options;
     options.endpoint = endpoint;
-    options.use_ssl_credentials = false;
+    options.use_ssl_credentials = use_ssl;
     auto exporter = otlp::OtlpGrpcLogRecordExporterFactory::Create(options);
     auto processor = logs_sdk::BatchLogRecordProcessorFactory::Create(
         std::move(exporter), logs_sdk::BatchLogRecordProcessorOptions{});

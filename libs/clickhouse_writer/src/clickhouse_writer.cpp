@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <iostream>
+#include <limits>
+#include <optional>
 
 #include "clickhouse/client.h"
 #include "clickhouse/columns/array.h"
@@ -13,6 +15,19 @@
 #include "telemetry/tracer.h"
 
 namespace clickhouse_writer {
+
+namespace {
+
+// Clamp a nanosecond timestamp to int64_t range before storing in DateTime64.
+// Values above INT64_MAX (year 2262) would silently wrap without this guard.
+constexpr uint64_t kSafeInt64Max =
+    static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+
+int64_t SafeTimestamp(uint64_t ns) noexcept {
+  return static_cast<int64_t>(std::min(ns, kSafeInt64Max));
+}
+
+}  // namespace
 
 std::vector<std::string> RequiredMetricColumnsForTable(const std::string& table_name) {
   if (table_name == "otel_metrics_gauge") {
@@ -148,7 +163,7 @@ bool ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& r
                 std::make_shared<clickhouse::ColumnString>()));
 
     for (const auto& row : rows) {
-      ts_col->Append(static_cast<int64_t>(row.timestamp_ns));
+      ts_col->Append(SafeTimestamp(row.timestamp_ns));
       trace_id_col->Append(row.trace_id);
       span_id_col->Append(row.span_id);
       parent_id_col->Append(row.parent_span_id);
@@ -214,6 +229,8 @@ bool ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
   try {
     auto& client = impl_->GetClient();
 
+    // One buffer per metric type. Constructed on first use so that batches
+    // containing only a subset of types don't allocate unused buffers.
     struct MetricInsertBuffer {
       std::shared_ptr<clickhouse::ColumnMapT<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>,
                                              clickhouse::ColumnString>> resource_attributes_col =
@@ -253,69 +270,51 @@ bool ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
           std::make_shared<clickhouse::ColumnDateTime64>(9);
       std::shared_ptr<clickhouse::ColumnFloat64> value_col = std::make_shared<clickhouse::ColumnFloat64>();
       std::shared_ptr<clickhouse::ColumnUInt64> count_col = std::make_shared<clickhouse::ColumnUInt64>();
-      std::shared_ptr<clickhouse::ColumnArray> bucket_counts_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnUInt64>());
-      std::shared_ptr<clickhouse::ColumnArray> explicit_bounds_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnFloat64>());
+      // Typed array columns: avoid per-row nested column heap allocation.
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnUInt64>> bucket_counts_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnUInt64>>();
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>> explicit_bounds_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>>();
       std::shared_ptr<clickhouse::ColumnInt32> scale_col = std::make_shared<clickhouse::ColumnInt32>();
       std::shared_ptr<clickhouse::ColumnUInt64> zero_count_col = std::make_shared<clickhouse::ColumnUInt64>();
       std::shared_ptr<clickhouse::ColumnInt32> positive_offset_col = std::make_shared<clickhouse::ColumnInt32>();
-      std::shared_ptr<clickhouse::ColumnArray> positive_bucket_counts_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnUInt64>());
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnUInt64>> positive_bucket_counts_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnUInt64>>();
       std::shared_ptr<clickhouse::ColumnInt32> negative_offset_col = std::make_shared<clickhouse::ColumnInt32>();
-      std::shared_ptr<clickhouse::ColumnArray> negative_bucket_counts_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnUInt64>());
-      std::shared_ptr<clickhouse::ColumnArray> quantiles_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnFloat64>());
-      std::shared_ptr<clickhouse::ColumnArray> quantile_values_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnFloat64>());
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnUInt64>> negative_bucket_counts_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnUInt64>>();
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>> quantiles_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>>();
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>> quantile_values_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>>();
       std::shared_ptr<clickhouse::ColumnUInt32> flags_col = std::make_shared<clickhouse::ColumnUInt32>();
       std::shared_ptr<clickhouse::ColumnFloat64> min_col = std::make_shared<clickhouse::ColumnFloat64>();
       std::shared_ptr<clickhouse::ColumnFloat64> max_col = std::make_shared<clickhouse::ColumnFloat64>();
       std::shared_ptr<clickhouse::ColumnInt32> aggregation_temporality_col =
           std::make_shared<clickhouse::ColumnInt32>();
       std::shared_ptr<clickhouse::ColumnUInt8> is_monotonic_col = std::make_shared<clickhouse::ColumnUInt8>();
-      std::shared_ptr<clickhouse::ColumnArray> exemplar_filtered_attributes_col =
-          std::make_shared<clickhouse::ColumnArray>(
+      // Exemplar filtered attributes is Array(Map(...)) — use ColumnArrayT for correct Append.
+      std::shared_ptr<clickhouse::ColumnArrayT<
+          clickhouse::ColumnMapT<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>,
+                                 clickhouse::ColumnString>>> exemplar_filtered_attributes_col =
+          std::make_shared<clickhouse::ColumnArrayT<
+              clickhouse::ColumnMapT<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>,
+                                     clickhouse::ColumnString>>>(
               std::make_shared<clickhouse::ColumnMapT<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>,
                                                       clickhouse::ColumnString>>(
                   std::make_shared<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>>(),
                   std::make_shared<clickhouse::ColumnString>()));
-      std::shared_ptr<clickhouse::ColumnArray> exemplar_time_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnDateTime64>(9));
-      std::shared_ptr<clickhouse::ColumnArray> exemplar_value_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnFloat64>());
-      std::shared_ptr<clickhouse::ColumnArray> exemplar_span_id_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnString>());
-      std::shared_ptr<clickhouse::ColumnArray> exemplar_trace_id_col =
-          std::make_shared<clickhouse::ColumnArray>(std::make_shared<clickhouse::ColumnString>());
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnDateTime64>> exemplar_time_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnDateTime64>>(
+              std::make_shared<clickhouse::ColumnDateTime64>(9));
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>> exemplar_value_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnFloat64>>();
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnString>> exemplar_span_id_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnString>>();
+      std::shared_ptr<clickhouse::ColumnArrayT<clickhouse::ColumnString>> exemplar_trace_id_col =
+          std::make_shared<clickhouse::ColumnArrayT<clickhouse::ColumnString>>();
 
       void Append(const otlp_decoder::MetricRow& row) {
-        const auto append_u64_array = [](const std::shared_ptr<clickhouse::ColumnArray>& arr,
-                                         const std::vector<uint64_t>& values) {
-          auto nested = std::make_shared<clickhouse::ColumnUInt64>();
-          for (const auto value : values) nested->Append(value);
-          arr->Append(nested);
-        };
-        const auto append_f64_array = [](const std::shared_ptr<clickhouse::ColumnArray>& arr,
-                                         const std::vector<double>& values) {
-          auto nested = std::make_shared<clickhouse::ColumnFloat64>();
-          for (const auto value : values) nested->Append(value);
-          arr->Append(nested);
-        };
-        const auto append_string_array = [](const std::shared_ptr<clickhouse::ColumnArray>& arr,
-                                            const std::vector<std::string>& values) {
-          auto nested = std::make_shared<clickhouse::ColumnString>();
-          for (const auto& value : values) nested->Append(value);
-          arr->Append(nested);
-        };
-        const auto append_datetime64_array = [](const std::shared_ptr<clickhouse::ColumnArray>& arr,
-                                                const std::vector<uint64_t>& values) {
-          auto nested = std::make_shared<clickhouse::ColumnDateTime64>(9);
-          for (const auto value : values) nested->Append(static_cast<int64_t>(value));
-          arr->Append(nested);
-        };
-
         resource_attributes_col->Append(row.resource_attributes);
         resource_schema_url_col->Append(row.resource_schema_url);
         scope_name_col->Append(row.scope_name);
@@ -328,66 +327,63 @@ bool ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
         metric_description_col->Append(row.metric_description);
         metric_unit_col->Append(row.metric_unit);
         attributes_col->Append(row.attributes);
-        start_time_col->Append(static_cast<int64_t>(row.start_timestamp_ns));
-        time_col->Append(static_cast<int64_t>(row.timestamp_ns));
+        start_time_col->Append(SafeTimestamp(row.start_timestamp_ns));
+        time_col->Append(SafeTimestamp(row.timestamp_ns));
         value_col->Append(row.value);
         count_col->Append(row.count);
-        append_u64_array(bucket_counts_col, row.bucket_counts);
-        append_f64_array(explicit_bounds_col, row.explicit_bounds);
+        bucket_counts_col->Append(row.bucket_counts);
+        explicit_bounds_col->Append(row.explicit_bounds);
         scale_col->Append(row.scale);
         zero_count_col->Append(row.zero_count);
         positive_offset_col->Append(row.positive_offset);
-        append_u64_array(positive_bucket_counts_col, row.positive_bucket_counts);
+        positive_bucket_counts_col->Append(row.positive_bucket_counts);
         negative_offset_col->Append(row.negative_offset);
-        append_u64_array(negative_bucket_counts_col, row.negative_bucket_counts);
-        append_f64_array(quantiles_col, row.quantile_percentages);
-        append_f64_array(quantile_values_col, row.quantile_values);
+        negative_bucket_counts_col->Append(row.negative_bucket_counts);
+        quantiles_col->Append(row.quantile_percentages);
+        quantile_values_col->Append(row.quantile_values);
         flags_col->Append(row.flags);
         min_col->Append(row.min);
         max_col->Append(row.max);
         aggregation_temporality_col->Append(row.aggregation_temporality);
         is_monotonic_col->Append(row.is_monotonic ? 1 : 0);
 
-        auto exemplar_filtered_attributes_nested = std::make_shared<
-            clickhouse::ColumnMapT<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>,
-                                   clickhouse::ColumnString>>(
-            std::make_shared<clickhouse::ColumnLowCardinalityT<clickhouse::ColumnString>>(),
-            std::make_shared<clickhouse::ColumnString>());
-        for (const auto& attrs : row.exemplar_filtered_attributes) {
-          exemplar_filtered_attributes_nested->Append(attrs);
-        }
-        exemplar_filtered_attributes_col->Append(exemplar_filtered_attributes_nested);
-        append_datetime64_array(exemplar_time_col, row.exemplar_timestamps_ns);
-        append_f64_array(exemplar_value_col, row.exemplar_values);
-        append_string_array(exemplar_span_id_col, row.exemplar_span_ids);
-        append_string_array(exemplar_trace_id_col, row.exemplar_trace_ids);
+        exemplar_filtered_attributes_col->Append(row.exemplar_filtered_attributes);
+        exemplar_time_col->Append(row.exemplar_timestamps_ns);
+        exemplar_value_col->Append(row.exemplar_values);
+        exemplar_span_id_col->Append(row.exemplar_span_ids);
+        exemplar_trace_id_col->Append(row.exemplar_trace_ids);
       }
 
       [[nodiscard]] size_t RowCount() const { return metric_col->Size(); }
     };
 
-    MetricInsertBuffer gauge;
-    MetricInsertBuffer sum;
-    MetricInsertBuffer histogram;
-    MetricInsertBuffer exponential_histogram;
-    MetricInsertBuffer summary;
+    std::optional<MetricInsertBuffer> gauge;
+    std::optional<MetricInsertBuffer> sum;
+    std::optional<MetricInsertBuffer> histogram;
+    std::optional<MetricInsertBuffer> exponential_histogram;
+    std::optional<MetricInsertBuffer> summary;
 
     for (const auto& row : rows) {
       switch (row.metric_type) {
         case otlp_decoder::MetricType::Gauge:
-          gauge.Append(row);
+          if (!gauge) gauge.emplace();
+          gauge->Append(row);
           break;
         case otlp_decoder::MetricType::Sum:
-          sum.Append(row);
+          if (!sum) sum.emplace();
+          sum->Append(row);
           break;
         case otlp_decoder::MetricType::Histogram:
-          histogram.Append(row);
+          if (!histogram) histogram.emplace();
+          histogram->Append(row);
           break;
         case otlp_decoder::MetricType::ExponentialHistogram:
-          exponential_histogram.Append(row);
+          if (!exponential_histogram) exponential_histogram.emplace();
+          exponential_histogram->Append(row);
           break;
         case otlp_decoder::MetricType::Summary:
-          summary.Append(row);
+          if (!summary) summary.emplace();
+          summary->Append(row);
           break;
       }
     }
@@ -438,11 +434,11 @@ bool ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
       client.Insert(table, block);
     };
 
-    insert_block("otel_metrics_gauge", gauge);
-    insert_block("otel_metrics_sum", sum);
-    insert_block("otel_metrics_histogram", histogram);
-    insert_block("otel_metrics_exponentialhistogram", exponential_histogram);
-    insert_block("otel_metrics_summary", summary);
+    if (gauge)                insert_block("otel_metrics_gauge",                *gauge);
+    if (sum)                  insert_block("otel_metrics_sum",                  *sum);
+    if (histogram)            insert_block("otel_metrics_histogram",            *histogram);
+    if (exponential_histogram) insert_block("otel_metrics_exponentialhistogram", *exponential_histogram);
+    if (summary)              insert_block("otel_metrics_summary",              *summary);
 
     telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted metrics rows=" << rows.size() << '\n';
@@ -494,7 +490,7 @@ bool ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows)
             std::make_shared<clickhouse::ColumnString>());
 
     for (const auto& row : rows) {
-      ts_col->Append(static_cast<int64_t>(row.timestamp_ns));
+      ts_col->Append(SafeTimestamp(row.timestamp_ns));
       trace_id_col->Append(row.trace_id);
       span_id_col->Append(row.span_id);
       trace_flags_col->Append(row.trace_flags);

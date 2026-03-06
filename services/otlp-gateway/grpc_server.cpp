@@ -86,7 +86,10 @@ OtlpGrpcServer::OtlpGrpcServer(const GatewayConfig& config)
       logs_service_(publisher_, config.log_subject) {}
 
 void OtlpGrpcServer::Run() {
+  static constexpr int kMaxRecvMessageSizeBytes = 64 * 1024 * 1024;  // 64 MB
+
   grpc::ServerBuilder builder;
+  builder.SetMaxReceiveMessageSize(kMaxRecvMessageSizeBytes);
   std::shared_ptr<grpc::ServerCredentials> credentials;
   if (tls_enabled_) {
     grpc::SslServerCredentialsOptions ssl_options;

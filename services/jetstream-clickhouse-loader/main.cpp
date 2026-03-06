@@ -4,11 +4,14 @@
 #include "telemetry/tracer.h"
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <limits>
+#include <mutex>
 #include <pthread.h>
 #include <string>
 #include <thread>
@@ -111,6 +114,10 @@ int main() {
         {cfg.trace_subject, cfg.metric_subject, cfg.log_subject});
 
     std::atomic<bool> running{true};
+    std::atomic<bool> consumer_failed{false};
+    std::mutex consumer_exception_mutex;
+    std::exception_ptr consumer_exception;
+
     std::thread consumer_thread([&]() {
       try {
         while (running.load(std::memory_order_relaxed)) {
@@ -124,30 +131,50 @@ int main() {
             }
           });
           batcher.FlushAll();
-          std::this_thread::sleep_for(std::chrono::seconds(1));
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         batcher.FlushAll();
-      } catch (const std::exception &e) {
-        spdlog::critical("Fatal consumer loop error: {}", e.what());
-        running.store(false, std::memory_order_relaxed);
       } catch (...) {
-        spdlog::critical("Fatal consumer loop error: unknown exception");
-        running.store(false, std::memory_order_relaxed);
+        {
+          std::lock_guard<std::mutex> lock(consumer_exception_mutex);
+          consumer_exception = std::current_exception();
+        }
+        consumer_failed.store(true, std::memory_order_release);
       }
     });
 
+    // Poll for signals with a short timeout so we also detect consumer failures.
     int received_signal = 0;
-    if (sigwait(&signal_set, &received_signal) != 0) {
-      spdlog::error("sigwait failed, forcing shutdown");
-      received_signal = SIGTERM;
+    while (!consumer_failed.load(std::memory_order_acquire)) {
+      timespec timeout{};
+      timeout.tv_nsec = 100'000'000;  // 100 ms
+      const int sig = sigtimedwait(&signal_set, nullptr, &timeout);
+      if (sig == SIGINT || sig == SIGTERM) {
+        received_signal = sig;
+        break;
+      }
+      if (sig != -1) continue;
+      if (errno == EAGAIN || errno == EINTR) continue;
+      spdlog::error("sigtimedwait failed: {}", std::strerror(errno));
+      break;
     }
-    spdlog::info("Received signal {}, shutting down loader", received_signal);
 
     running.store(false, std::memory_order_relaxed);
     if (consumer_thread.joinable()) {
       consumer_thread.join();
     }
 
+    if (consumer_failed.load(std::memory_order_acquire)) {
+      std::exception_ptr ep;
+      {
+        std::lock_guard<std::mutex> lock(consumer_exception_mutex);
+        ep = consumer_exception;
+      }
+      if (ep) std::rethrow_exception(ep);
+      throw std::runtime_error("consumer loop failed without an exception");
+    }
+
+    spdlog::info("Received signal {}, shutting down loader", received_signal);
     return 0;
   } catch (const std::exception &e) {
     spdlog::critical("Fatal startup/runtime error: {}", e.what());

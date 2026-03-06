@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 
 #include "telemetry/tracer.h"
@@ -18,6 +19,7 @@ enum class InitBehaviorOverride {
 };
 
 InitBehaviorOverride g_init_behavior_override = InitBehaviorOverride::kDefault;
+std::mutex g_init_behavior_mutex;
 
 bool invoke_handler_with_policy(const std::string &subject,
                                 const std::string &payload,
@@ -70,11 +72,16 @@ struct JetStreamPublisher::Impl {
 JetStreamPublisher::JetStreamPublisher(std::string url, std::string stream_name,
                                        std::vector<std::string> subjects)
     : url_(std::move(url)) {
-  if (g_init_behavior_override == InitBehaviorOverride::kForceFailure) {
+  InitBehaviorOverride behavior;
+  {
+    std::lock_guard<std::mutex> lock(g_init_behavior_mutex);
+    behavior = g_init_behavior_override;
+  }
+  if (behavior == InitBehaviorOverride::kForceFailure) {
     throw std::runtime_error(
         "JetStream publisher forced init failure for tests");
   }
-  if (g_init_behavior_override == InitBehaviorOverride::kForceSuccess) {
+  if (behavior == InitBehaviorOverride::kForceSuccess) {
     return;
   }
   impl_ = std::make_unique<Impl>(url_, stream_name, subjects);
@@ -129,11 +136,16 @@ JetStreamConsumer::JetStreamConsumer(std::string url, std::string stream,
                                      std::vector<std::string> subjects)
     : url_(std::move(url)), stream_(std::move(stream)),
       subjects_(std::move(subjects)) {
-  if (g_init_behavior_override == InitBehaviorOverride::kForceFailure) {
+  InitBehaviorOverride behavior;
+  {
+    std::lock_guard<std::mutex> lock(g_init_behavior_mutex);
+    behavior = g_init_behavior_override;
+  }
+  if (behavior == InitBehaviorOverride::kForceFailure) {
     throw std::runtime_error(
         "JetStream consumer forced init failure for tests");
   }
-  if (g_init_behavior_override == InitBehaviorOverride::kForceSuccess) {
+  if (behavior == InitBehaviorOverride::kForceSuccess) {
     return;
   }
   impl_ = std::make_unique<Impl>(url_, stream_, subjects_);
@@ -179,14 +191,17 @@ bool InvokeConsumerHandlerForTests(
 }
 
 void ForceInitializationSuccessForTests() {
+  std::lock_guard<std::mutex> lock(g_init_behavior_mutex);
   g_init_behavior_override = InitBehaviorOverride::kForceSuccess;
 }
 
 void ForceInitializationFailureForTests() {
+  std::lock_guard<std::mutex> lock(g_init_behavior_mutex);
   g_init_behavior_override = InitBehaviorOverride::kForceFailure;
 }
 
 void ResetInitializationBehaviorForTests() {
+  std::lock_guard<std::mutex> lock(g_init_behavior_mutex);
   g_init_behavior_override = InitBehaviorOverride::kDefault;
 }
 

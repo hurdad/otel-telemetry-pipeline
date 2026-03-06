@@ -30,13 +30,6 @@ inline LoaderConfig LoadConfig(const std::string& path) {
     if (const auto nats = root["nats"]) {
       if (nats["url"])    cfg.nats_url    = nats["url"].as<std::string>();
       if (nats["stream"]) cfg.nats_stream = nats["stream"].as<std::string>();
-      if (const auto subjects = nats["subjects"]) {
-        if (subjects.IsSequence() && subjects.size() >= 3) {
-          cfg.trace_subject = subjects[0].as<std::string>();
-          cfg.metric_subject = subjects[1].as<std::string>();
-          cfg.log_subject = subjects[2].as<std::string>();
-        }
-      }
     }
     if (const auto subjects = root["subjects"]) {
       if (subjects["traces"]) {
