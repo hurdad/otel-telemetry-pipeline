@@ -112,6 +112,22 @@ services:
     ports:
       - "8090:8080"
 
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    depends_on:
+      - clickhouse
+    environment:
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+
   fastapi-rest-sample:
     build:
       context: ./examples/fastapi-rest-otel
@@ -146,3 +162,4 @@ services:
 volumes:
   nats-data:
   clickhouse-data:
+  grafana-data:

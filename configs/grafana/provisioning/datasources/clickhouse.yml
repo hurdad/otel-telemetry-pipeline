@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: ClickHouse
+    uid: clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    url: http://clickhouse:8123
+    basicAuth: true
+    basicAuthUser: otel
+    secureJsonData:
+      basicAuthPassword: otel
+    jsonData:
+      defaultDatabase: otel
+      server: clickhouse
+      port: 8123
+      protocol: http
+      username: otel
+      tlsSkipVerify: true

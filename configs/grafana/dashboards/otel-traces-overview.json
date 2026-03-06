@@ -1,0 +1,52 @@
+{
+  "id": null,
+  "uid": "otel-traces",
+  "title": "OTel Traces Overview",
+  "tags": ["otel", "clickhouse", "traces"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Spans per minute",
+      "id": 1,
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(Timestamp, INTERVAL 1 minute) AS time, count() AS spans FROM otel.otel_traces WHERE $__timeFilter(Timestamp) GROUP BY time ORDER BY time"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "table",
+      "title": "Slowest spans",
+      "id": 2,
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT Timestamp, ServiceName, SpanName, round(Duration / 1000000, 2) AS duration_ms, StatusCode FROM otel.otel_traces WHERE $__timeFilter(Timestamp) ORDER BY Duration DESC LIMIT 50"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    }
+  ]
+}
