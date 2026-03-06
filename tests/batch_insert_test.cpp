@@ -19,6 +19,7 @@ TEST(BatchInsertTest, CallsInserterWhenMaxRowsReached) {
   auto inserter = [&](const std::vector<TraceRow>& rows) {
     ++inserter_calls;
     snapshots.push_back(rows);
+    return true;
   };
 
   const TraceRow first{1, "trace-1", "span-1"};
@@ -44,6 +45,7 @@ TEST(BatchInsertTest, FlushCallsInserterOnceAndClearsBuffer) {
   auto inserter = [&](const std::vector<TraceRow>& rows) {
     ++inserter_calls;
     snapshots.push_back(rows);
+    return true;
   };
 
   const TraceRow pending{3, "trace-3", "span-3"};
@@ -68,6 +70,7 @@ TEST(BatchInsertTest, FlushNoOpWhenBufferEmpty) {
   auto inserter = [&](const std::vector<TraceRow>& rows) {
     ++inserter_calls;
     snapshots.push_back(rows);
+    return true;
   };
 
   batcher.Flush(inserter);
@@ -84,6 +87,7 @@ TEST(BatchInsertTest, AddTriggersFlushWhenIntervalElapsed) {
   auto inserter = [&](const std::vector<TraceRow>& rows) {
     ++inserter_calls;
     snapshots.push_back(rows);
+    return true;
   };
 
   const TraceRow first{4, "trace-4", "span-4"};
@@ -100,6 +104,46 @@ TEST(BatchInsertTest, AddTriggersFlushWhenIntervalElapsed) {
   ASSERT_EQ(snapshots[0].size(), 2U);
   EXPECT_EQ(snapshots[0][0].trace_id, first.trace_id);
   EXPECT_EQ(snapshots[0][1].trace_id, second.trace_id);
+}
+
+TEST(BatchInsertTest, FailedFlushRetainsRowsUntilSuccessfulRetry) {
+  BatchInsert<TraceRow> batcher(2, std::chrono::seconds(1));
+  int inserter_calls = 0;
+  int failures_remaining = 1;
+  std::vector<std::vector<TraceRow>> snapshots;
+
+  auto inserter = [&](const std::vector<TraceRow>& rows) {
+    ++inserter_calls;
+    snapshots.push_back(rows);
+    if (failures_remaining > 0) {
+      --failures_remaining;
+      return false;
+    }
+    return true;
+  };
+
+  const TraceRow first{6, "trace-6", "span-6"};
+  const TraceRow second{7, "trace-7", "span-7"};
+
+  batcher.Add(first, inserter);
+  batcher.Add(second, inserter);
+
+  ASSERT_EQ(inserter_calls, 1);
+  ASSERT_EQ(snapshots.size(), 1U);
+  ASSERT_EQ(snapshots[0].size(), 2U);
+
+  // Initial flush failed, so rows should still be buffered and retried on explicit Flush.
+  batcher.Flush(inserter);
+
+  ASSERT_EQ(inserter_calls, 2);
+  ASSERT_EQ(snapshots.size(), 2U);
+  ASSERT_EQ(snapshots[1].size(), 2U);
+  EXPECT_EQ(snapshots[1][0].trace_id, first.trace_id);
+  EXPECT_EQ(snapshots[1][1].trace_id, second.trace_id);
+
+  // Successful retry clears buffer.
+  batcher.Flush(inserter);
+  EXPECT_EQ(inserter_calls, 2);
 }
 
 TEST(ClickHouseWriterSchemaTest, MetricInsertBlocksContainAllSchemaColumns) {

@@ -85,8 +85,8 @@ ClickHouseWriter::ClickHouseWriter(std::string host, uint16_t port, std::string 
 
 ClickHouseWriter::~ClickHouseWriter() = default;
 
-void ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows) {
-  if (rows.empty()) return;
+bool ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows) {
+  if (rows.empty()) return true;
   auto span = telemetry::StartSpan("clickhouse_insert");
   try {
     auto& client = impl_->GetClient();
@@ -199,15 +199,17 @@ void ClickHouseWriter::InsertTraces(const std::vector<otlp_decoder::TraceRow>& r
     client.Insert("otel_traces", block);
     telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted traces rows=" << rows.size() << '\n';
+    return true;
   } catch (const std::exception& e) {
     impl_->ResetClient();
     telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertTraces error: " << e.what() << '\n';
+    return false;
   }
 }
 
-void ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>& rows) {
-  if (rows.empty()) return;
+bool ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>& rows) {
+  if (rows.empty()) return true;
   auto span = telemetry::StartSpan("clickhouse_insert");
   try {
     auto& client = impl_->GetClient();
@@ -444,15 +446,17 @@ void ClickHouseWriter::InsertMetrics(const std::vector<otlp_decoder::MetricRow>&
 
     telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted metrics rows=" << rows.size() << '\n';
+    return true;
   } catch (const std::exception& e) {
     impl_->ResetClient();
     telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertMetrics error: " << e.what() << '\n';
+    return false;
   }
 }
 
-void ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows) {
-  if (rows.empty()) return;
+bool ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows) {
+  if (rows.empty()) return true;
   auto span = telemetry::StartSpan("clickhouse_insert");
   try {
     auto& client = impl_->GetClient();
@@ -527,10 +531,12 @@ void ClickHouseWriter::InsertLogs(const std::vector<otlp_decoder::LogRow>& rows)
     client.Insert("otel_logs", block);
     telemetry::RecordClickHouseRowsInserted(static_cast<uint64_t>(rows.size()));
     std::clog << "inserted logs rows=" << rows.size() << '\n';
+    return true;
   } catch (const std::exception& e) {
     impl_->ResetClient();
     telemetry::RecordClickHouseInsertError();
     std::clog << "ClickHouse InsertLogs error: " << e.what() << '\n';
+    return false;
   }
 }
 

@@ -18,9 +18,9 @@ class ClickHouseWriter {
                    std::string user = "default", std::string password = "");
   ~ClickHouseWriter();
 
-  void InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows);
-  void InsertMetrics(const std::vector<otlp_decoder::MetricRow>& rows);
-  void InsertLogs(const std::vector<otlp_decoder::LogRow>& rows);
+  bool InsertTraces(const std::vector<otlp_decoder::TraceRow>& rows);
+  bool InsertMetrics(const std::vector<otlp_decoder::MetricRow>& rows);
+  bool InsertLogs(const std::vector<otlp_decoder::LogRow>& rows);
 
  private:
   struct Impl;
@@ -38,18 +38,20 @@ class BatchInsert {
     rows_.emplace_back(std::move(row));
     const auto now = std::chrono::steady_clock::now();
     if (rows_.size() >= max_rows_ || now - last_flush_ >= flush_interval_) {
-      inserter(rows_);
-      rows_.clear();
-      last_flush_ = now;
+      if (inserter(rows_)) {
+        rows_.clear();
+        last_flush_ = now;
+      }
     }
   }
 
   template <typename Inserter>
   void Flush(const Inserter& inserter) {
     if (!rows_.empty()) {
-      inserter(rows_);
-      rows_.clear();
-      last_flush_ = std::chrono::steady_clock::now();
+      if (inserter(rows_)) {
+        rows_.clear();
+        last_flush_ = std::chrono::steady_clock::now();
+      }
     }
   }
 
