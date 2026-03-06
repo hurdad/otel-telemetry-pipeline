@@ -1,0 +1,58 @@
+{
+  "id": null,
+  "uid": "otel-metrics",
+  "title": "OTel Metrics Overview",
+  "tags": ["otel", "clickhouse", "metrics"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Metric points ingested (1m)",
+      "id": 1,
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(TimeUnix, INTERVAL 1 minute) AS time, count() AS points FROM otel.otel_metrics_sum WHERE $__timeFilter(TimeUnix) GROUP BY time ORDER BY time"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "table",
+      "title": "Top metric names",
+      "id": 2,
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT MetricName, ServiceName, count() AS samples FROM otel.otel_metrics_sum WHERE $__timeFilter(TimeUnix) GROUP BY MetricName, ServiceName ORDER BY samples DESC LIMIT 20"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    }
+  ]
+}

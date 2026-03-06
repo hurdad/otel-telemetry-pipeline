@@ -1,0 +1,52 @@
+{
+  "id": null,
+  "uid": "otel-logs",
+  "title": "OTel Logs Overview",
+  "tags": ["otel", "clickhouse", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Log events per minute",
+      "id": 1,
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT toStartOfInterval(TimestampTime, INTERVAL 1 minute) AS time, count() AS logs FROM otel.otel_logs WHERE $__timeFilter(TimestampTime) GROUP BY time ORDER BY time"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "table",
+      "title": "Recent logs",
+      "id": 2,
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "format": 1,
+          "rawSql": "SELECT TimestampTime AS ts, ServiceName, SeverityText, Body FROM otel.otel_logs WHERE $__timeFilter(TimestampTime) ORDER BY TimestampTime DESC LIMIT 100"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    }
+  ]
+}
