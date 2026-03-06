@@ -1,4 +1,7 @@
-CREATE TABLE IF NOT EXISTS otel_traces
+CREATE DATABASE IF NOT EXISTS otel;
+USE otel;
+
+CREATE TABLE IF NOT EXISTS otel.otel_traces
 (
     `Timestamp` DateTime64(9) CODEC(Delta(8), ZSTD(1)),
     `TraceId` String CODEC(ZSTD(1)),
@@ -36,7 +39,7 @@ ORDER BY (ServiceName, SpanName, toDateTime(Timestamp))
 TTL toDate(Timestamp) + toIntervalDay(30)
 SETTINGS index_granularity = 8192, ttl_only_drop_parts = 1;
 
-CREATE TABLE IF NOT EXISTS otel_metrics_gauge
+CREATE TABLE IF NOT EXISTS otel.otel_metrics_gauge
 (
     `ResourceAttributes` Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     `ResourceSchemaUrl` String CODEC(ZSTD(1)),
@@ -70,7 +73,7 @@ ENGINE = MergeTree
 PARTITION BY toDate(TimeUnix)
 ORDER BY (ServiceName, MetricName, Attributes, toUnixTimestamp64Nano(TimeUnix));
 
-CREATE TABLE IF NOT EXISTS otel_metrics_sum
+CREATE TABLE IF NOT EXISTS otel.otel_metrics_sum
 (
     `ResourceAttributes` Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     `ResourceSchemaUrl` String CODEC(ZSTD(1)),
@@ -106,7 +109,7 @@ ENGINE = MergeTree
 PARTITION BY toDate(TimeUnix)
 ORDER BY (ServiceName, MetricName, Attributes, toUnixTimestamp64Nano(TimeUnix));
 
-CREATE TABLE IF NOT EXISTS otel_metrics_histogram
+CREATE TABLE IF NOT EXISTS otel.otel_metrics_histogram
 (
     `ResourceAttributes` Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     `ResourceSchemaUrl` String CODEC(ZSTD(1)),
@@ -146,7 +149,7 @@ ENGINE = MergeTree
 PARTITION BY toDate(TimeUnix)
 ORDER BY (ServiceName, MetricName, Attributes, toUnixTimestamp64Nano(TimeUnix));
 
-CREATE TABLE IF NOT EXISTS otel_metrics_exponentialhistogram
+CREATE TABLE IF NOT EXISTS otel.otel_metrics_exponentialhistogram
 (
     `ResourceAttributes` Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     `ResourceSchemaUrl` String CODEC(ZSTD(1)),
@@ -190,7 +193,7 @@ ENGINE = MergeTree
 PARTITION BY toDate(TimeUnix)
 ORDER BY (ServiceName, MetricName, Attributes, toUnixTimestamp64Nano(TimeUnix));
 
-CREATE TABLE IF NOT EXISTS otel_metrics_summary
+CREATE TABLE IF NOT EXISTS otel.otel_metrics_summary
 (
     `ResourceAttributes` Map(LowCardinality(String), String) CODEC(ZSTD(1)),
     `ResourceSchemaUrl` String CODEC(ZSTD(1)),
@@ -222,7 +225,7 @@ ENGINE = MergeTree
 PARTITION BY toDate(TimeUnix)
 ORDER BY (ServiceName, MetricName, Attributes, toUnixTimestamp64Nano(TimeUnix));
 
-CREATE TABLE IF NOT EXISTS otel_logs
+CREATE TABLE IF NOT EXISTS otel.otel_logs
 (
     `Timestamp` DateTime64(9) CODEC(Delta(8), ZSTD(1)),
     `TimestampTime` DateTime DEFAULT toDateTime(Timestamp),
