@@ -21,3 +21,11 @@ if(TARGET telemetry)
   target_link_libraries(telemetry_tests PRIVATE telemetry GTest::gtest GTest::gtest_main)
   add_test(NAME telemetry_tests COMMAND telemetry_tests)
 endif()
+
+add_executable(jetstream_client_init_tests
+  jetstream_client_init_tests.cpp)
+target_link_libraries(jetstream_client_init_tests PRIVATE
+  jetstream_client
+  GTest::gtest
+  GTest::gtest_main)
+add_test(NAME jetstream_client_init_tests COMMAND jetstream_client_init_tests)
