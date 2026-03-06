@@ -129,14 +129,16 @@ Retention is configured with max age 24h.
 clickhouse-client --multiquery < scripts/clickhouse_schema.sql
 ```
 
+The schema script creates (if needed) and uses the `otel` database before creating tables.
+
 Tables:
-- `otel_traces`
-- `otel_metrics_gauge`
-- `otel_metrics_sum`
-- `otel_metrics_histogram`
-- `otel_metrics_exponentialhistogram`
-- `otel_metrics_summary`
-- `otel_logs`
+- `otel.otel_traces`
+- `otel.otel_metrics_gauge`
+- `otel.otel_metrics_sum`
+- `otel.otel_metrics_histogram`
+- `otel.otel_metrics_exponentialhistogram`
+- `otel.otel_metrics_summary`
+- `otel.otel_logs`
 
 ## Example pipeline
 
