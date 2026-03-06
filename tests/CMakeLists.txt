@@ -31,3 +31,10 @@ target_link_libraries(grpc_export_handler_tests PRIVATE
   gRPC::grpc++
   spdlog::spdlog)
 add_test(NAME grpc_export_handler_tests COMMAND grpc_export_handler_tests)
+add_executable(jetstream_client_init_tests
+  jetstream_client_init_tests.cpp)
+target_link_libraries(jetstream_client_init_tests PRIVATE
+  jetstream_client
+  GTest::gtest
+  GTest::gtest_main)
+add_test(NAME jetstream_client_init_tests COMMAND jetstream_client_init_tests)
