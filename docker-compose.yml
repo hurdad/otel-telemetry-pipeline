@@ -91,6 +91,38 @@ services:
       - ./configs/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
       - "8888:8888"
+      - "4318:4318"
+
+  fastapi-rest-sample:
+    build:
+      context: ./examples/fastapi-rest-otel
+      dockerfile: Dockerfile
+    depends_on:
+      - otel-collector
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+      OTEL_SERVICE_NAME: fastapi-rest-sample
+      DEPLOYMENT_ENV: docker-compose
+    ports:
+      - "8000:8000"
+
+  fastapi-rest-sample-loadgen:
+    image: locustio/locust:2.31.1
+    depends_on:
+      - fastapi-rest-sample
+    working_dir: /mnt/locust
+    volumes:
+      - ./examples/fastapi-rest-otel/locustfile.py:/mnt/locust/locustfile.py:ro
+    command:
+      - -f
+      - /mnt/locust/locustfile.py
+      - --host
+      - http://fastapi-rest-sample:8000
+      - --headless
+      - --users
+      - "15"
+      - --spawn-rate
+      - "3"
 
 volumes:
   nats-data:

@@ -32,6 +32,29 @@ Then send OTLP data to the collector:
 
 The compose stack starts Collector → Gateway → NATS JetStream → Loader → ClickHouse, and initializes both the JetStream stream and ClickHouse schema automatically.
 
+## Sample FastAPI app (sends telemetry to collector)
+
+A Python sample REST app is available at `examples/fastapi-rest-otel`.
+
+It uses:
+- `fastapi` + `uvicorn`
+- `opentelemetry-sdk`
+- OTLP gRPC exporter to send traces to OpenTelemetry Collector
+
+Quick run:
+
+```bash
+cd examples/fastapi-rest-otel
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Default exporter endpoint: `http://localhost:4317`
+
+See `examples/fastapi-rest-otel/README.md` for Docker usage, Locust load generation, and test requests.
+
 ## Repository layout
 
 - `services/otlp-gateway`: OTLP ingest gateway implementation.
@@ -188,6 +211,8 @@ A ready-to-run compose stack is provided in `docker-compose.yml` with:
 - JetStream stream bootstrap job (`jetstream-init`)
 - ClickHouse (`clickhouse`)
 - JetStream loader (`jetstream-clickhouse-loader`)
+- FastAPI sample app (`fastapi-rest-sample`)
+- Locust headless load generator (`fastapi-rest-sample-loadgen`)
 
 Start everything:
 
