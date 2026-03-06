@@ -40,7 +40,7 @@ services:
         fi
 
         nats --server nats://nats:4222 stream add OTEL_TELEMETRY \
-          --subjects "otel.traces" "otel.metrics" "otel.logs" \
+          --subjects "otel.traces,otel.metrics,otel.logs" \
           --storage file \
           --retention limits \
           --max-age 24h \
