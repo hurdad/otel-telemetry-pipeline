@@ -6,23 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(OTEL_PIPELINE_BUILD_TESTS "Build tests" OFF)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  set(OTEL_PIPELINE_USE_JEMALLOC_DEFAULT ON)
-else()
-  set(OTEL_PIPELINE_USE_JEMALLOC_DEFAULT OFF)
-endif()
-
-option(OTEL_PIPELINE_USE_JEMALLOC "Link services with jemalloc allocator" ${OTEL_PIPELINE_USE_JEMALLOC_DEFAULT})
 set(BUILD_TESTING OFF CACHE BOOL "Disable third-party tests by default" FORCE)
 
+find_library(OTEL_PIPELINE_JEMALLOC_LIB NAMES jemalloc REQUIRED)
 add_library(otel_pipeline_jemalloc INTERFACE)
-if(OTEL_PIPELINE_USE_JEMALLOC)
-  find_library(OTEL_PIPELINE_JEMALLOC_LIB NAMES jemalloc)
-  if(NOT OTEL_PIPELINE_JEMALLOC_LIB)
-    message(FATAL_ERROR "OTEL_PIPELINE_USE_JEMALLOC is ON, but jemalloc was not found")
-  endif()
-  target_link_libraries(otel_pipeline_jemalloc INTERFACE ${OTEL_PIPELINE_JEMALLOC_LIB})
-endif()
+target_link_libraries(otel_pipeline_jemalloc INTERFACE ${OTEL_PIPELINE_JEMALLOC_LIB})
 
 include(cmake/dependencies.cmake)
 
