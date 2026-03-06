@@ -30,15 +30,21 @@ services:
     command:
       - -c
       - |
-        until nats --server nats://nats:4222 server ping >/dev/null 2>&1; do
+        until nats --server nats://nats:4222 stream ls >/dev/null 2>&1; do
           sleep 1
         done
+
+        if nats --server nats://nats:4222 stream info OTEL_TELEMETRY >/dev/null 2>&1; then
+          echo "Stream OTEL_TELEMETRY already exists; skipping creation"
+          exit 0
+        fi
+
         nats --server nats://nats:4222 stream add OTEL_TELEMETRY \
-          --subjects "otel.traces,otel.metrics,otel.logs" \
+          --subjects "otel.traces" "otel.metrics" "otel.logs" \
           --storage file \
           --retention limits \
           --max-age 24h \
-          --defaults
+          --ack
 
   otlp-gateway:
     build:
