@@ -37,8 +37,24 @@ spec:
           env:
             - name: NATS_URL
               value: {{ .Values.nats.url | quote }}
+            - name: NATS_STREAM
+              value: {{ .Values.nats.stream | quote }}
+            - name: TRACE_SUBJECT
+              value: {{ .Values.subjects.traces | quote }}
+            - name: METRIC_SUBJECT
+              value: {{ .Values.subjects.metrics | quote }}
+            - name: LOG_SUBJECT
+              value: {{ .Values.subjects.logs | quote }}
             - name: GATEWAY_LISTEN_ADDR
               value: "0.0.0.0:{{ .Values.gateway.service.port }}"
+            - name: GATEWAY_TLS_ENABLED
+              value: {{ ternary "true" "false" .Values.gateway.tls.enabled | quote }}
+            - name: GATEWAY_TLS_CERT_FILE
+              value: {{ .Values.gateway.tls.certFile | quote }}
+            - name: GATEWAY_TLS_KEY_FILE
+              value: {{ .Values.gateway.tls.keyFile | quote }}
+            - name: GATEWAY_TLS_CA_FILE
+              value: {{ .Values.gateway.tls.caFile | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ .Values.gateway.telemetry.otlpEndpoint | quote }}
             - name: OTEL_SERVICE_NAME

@@ -72,6 +72,12 @@ int main() {
       cfg.clickhouse_user = v;
     if (const char *v = std::getenv("CLICKHOUSE_PASSWORD"); v && v[0])
       cfg.clickhouse_password = v;
+    if (const char *v = std::getenv("TRACE_SUBJECT"); v && v[0])
+      cfg.trace_subject = v;
+    if (const char *v = std::getenv("METRIC_SUBJECT"); v && v[0])
+      cfg.metric_subject = v;
+    if (const char *v = std::getenv("LOG_SUBJECT"); v && v[0])
+      cfg.log_subject = v;
 
     spdlog::info("Starting jetstream-clickhouse-loader (config={})",
                  config_path);
@@ -81,6 +87,8 @@ int main() {
                  cfg.clickhouse_user);
     spdlog::info("  Batch: max_rows={} flush_interval={}s", cfg.batch_max_rows,
                  cfg.flush_interval.count());
+    spdlog::info("  Subjects: traces={} metrics={} logs={}", cfg.trace_subject,
+                 cfg.metric_subject, cfg.log_subject);
 
     // Block signals before spawning the consumer thread so they are delivered
     // only to the main thread's sigwait call.
@@ -100,17 +108,17 @@ int main() {
                               cfg.flush_interval);
     jetstream_client::JetStreamConsumer consumer(
         cfg.nats_url, cfg.nats_stream,
-        {"otel.traces", "otel.metrics", "otel.logs"});
+        {cfg.trace_subject, cfg.metric_subject, cfg.log_subject});
 
     std::atomic<bool> running{true};
     std::thread consumer_thread([&]() {
       while (running.load(std::memory_order_relaxed)) {
-        consumer.Poll([&batcher](const jetstream_client::Message &msg) {
-          if (msg.subject == "otel.traces") {
+        consumer.Poll([&batcher, &cfg](const jetstream_client::Message &msg) {
+          if (msg.subject == cfg.trace_subject) {
             batcher.ProcessTraces(msg.payload);
-          } else if (msg.subject == "otel.metrics") {
+          } else if (msg.subject == cfg.metric_subject) {
             batcher.ProcessMetrics(msg.payload);
-          } else if (msg.subject == "otel.logs") {
+          } else if (msg.subject == cfg.log_subject) {
             batcher.ProcessLogs(msg.payload);
           }
         });

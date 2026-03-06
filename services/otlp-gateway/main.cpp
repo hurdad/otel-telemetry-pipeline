@@ -41,12 +41,29 @@ int main() {
       cfg.nats_url = v;
     if (const char *v = std::getenv("NATS_STREAM"); v && v[0])
       cfg.nats_stream = v;
+    if (const char *v = std::getenv("TRACE_SUBJECT"); v && v[0])
+      cfg.trace_subject = v;
+    if (const char *v = std::getenv("METRIC_SUBJECT"); v && v[0])
+      cfg.metric_subject = v;
+    if (const char *v = std::getenv("LOG_SUBJECT"); v && v[0])
+      cfg.log_subject = v;
+    if (const char *v = std::getenv("GATEWAY_TLS_ENABLED"); v && v[0])
+      cfg.tls_enabled = std::string(v) == "true" || std::string(v) == "1";
+    if (const char *v = std::getenv("GATEWAY_TLS_CERT_FILE"); v && v[0])
+      cfg.tls_cert_file = v;
+    if (const char *v = std::getenv("GATEWAY_TLS_KEY_FILE"); v && v[0])
+      cfg.tls_key_file = v;
+    if (const char *v = std::getenv("GATEWAY_TLS_CA_FILE"); v && v[0])
+      cfg.tls_ca_file = v;
 
     spdlog::info("Starting otlp-gateway (config={})", config_path);
     spdlog::info("  Listen: {}", cfg.listen_addr);
     spdlog::info("  NATS: {} stream={}", cfg.nats_url, cfg.nats_stream);
+    spdlog::info("  Subjects: traces={} metrics={} logs={}", cfg.trace_subject,
+                 cfg.metric_subject, cfg.log_subject);
+    spdlog::info("  TLS: enabled={}", cfg.tls_enabled);
 
-    OtlpGrpcServer server(cfg.listen_addr, cfg.nats_url, cfg.nats_stream);
+    OtlpGrpcServer server(cfg);
 
     // Block signals before spawning the server thread so they are delivered
     // only to the main thread's sigwait call, regardless of which thread they

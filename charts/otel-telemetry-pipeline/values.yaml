@@ -21,6 +21,11 @@ gateway:
   service:
     type: ClusterIP
     port: 4317
+  tls:
+    enabled: false
+    certFile: ""
+    keyFile: ""
+    caFile: ""
   telemetry:
     otlpEndpoint: ""
     serviceName: otlp-gateway

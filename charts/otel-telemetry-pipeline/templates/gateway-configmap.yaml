@@ -8,6 +8,11 @@ data:
   gateway.yaml: |
     server:
       listen: 0.0.0.0:{{ .Values.gateway.service.port }}
+      tls:
+        enabled: {{ .Values.gateway.tls.enabled }}
+        cert_file: {{ .Values.gateway.tls.certFile | quote }}
+        key_file: {{ .Values.gateway.tls.keyFile | quote }}
+        ca_file: {{ .Values.gateway.tls.caFile | quote }}
     nats:
       url: {{ .Values.nats.url | quote }}
       stream: {{ .Values.nats.stream | quote }}

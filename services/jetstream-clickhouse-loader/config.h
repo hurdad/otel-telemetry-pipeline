@@ -17,6 +17,9 @@ struct LoaderConfig {
   std::string clickhouse_password = "";
   uint32_t    batch_max_rows      = 50000;
   std::chrono::seconds flush_interval{2};
+  std::string trace_subject  = "otel.traces";
+  std::string metric_subject = "otel.metrics";
+  std::string log_subject    = "otel.logs";
 };
 
 inline LoaderConfig LoadConfig(const std::string& path) {
@@ -27,6 +30,24 @@ inline LoaderConfig LoadConfig(const std::string& path) {
     if (const auto nats = root["nats"]) {
       if (nats["url"])    cfg.nats_url    = nats["url"].as<std::string>();
       if (nats["stream"]) cfg.nats_stream = nats["stream"].as<std::string>();
+      if (const auto subjects = nats["subjects"]) {
+        if (subjects.IsSequence() && subjects.size() >= 3) {
+          cfg.trace_subject = subjects[0].as<std::string>();
+          cfg.metric_subject = subjects[1].as<std::string>();
+          cfg.log_subject = subjects[2].as<std::string>();
+        }
+      }
+    }
+    if (const auto subjects = root["subjects"]) {
+      if (subjects["traces"]) {
+        cfg.trace_subject = subjects["traces"].as<std::string>();
+      }
+      if (subjects["metrics"]) {
+        cfg.metric_subject = subjects["metrics"].as<std::string>();
+      }
+      if (subjects["logs"]) {
+        cfg.log_subject = subjects["logs"].as<std::string>();
+      }
     }
     if (const auto ch = root["clickhouse"]) {
       if (ch["host"])     cfg.clickhouse_host     = ch["host"].as<std::string>();

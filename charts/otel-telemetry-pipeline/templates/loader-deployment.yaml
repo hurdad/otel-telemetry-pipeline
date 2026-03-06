@@ -35,6 +35,12 @@ spec:
               value: {{ .Values.nats.url | quote }}
             - name: NATS_STREAM
               value: {{ .Values.nats.stream | quote }}
+            - name: TRACE_SUBJECT
+              value: {{ .Values.subjects.traces | quote }}
+            - name: METRIC_SUBJECT
+              value: {{ .Values.subjects.metrics | quote }}
+            - name: LOG_SUBJECT
+              value: {{ .Values.subjects.logs | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ .Values.loader.telemetry.otlpEndpoint | quote }}
             - name: OTEL_SERVICE_NAME

@@ -9,10 +9,11 @@
 #include "opentelemetry/proto/collector/logs/v1/logs_service.grpc.pb.h"
 #include "opentelemetry/proto/collector/metrics/v1/metrics_service.grpc.pb.h"
 #include "opentelemetry/proto/collector/trace/v1/trace_service.grpc.pb.h"
+#include "config.h"
 
 class OtlpGrpcServer final {
  public:
-  OtlpGrpcServer(std::string address, std::string nats_url, std::string stream_name);
+  explicit OtlpGrpcServer(const GatewayConfig& config);
   void Run();
   void Shutdown();
 
@@ -20,7 +21,8 @@ class OtlpGrpcServer final {
   class TraceServiceImpl final
       : public opentelemetry::proto::collector::trace::v1::TraceService::Service {
    public:
-    explicit TraceServiceImpl(jetstream_client::JetStreamPublisher& publisher);
+    TraceServiceImpl(jetstream_client::JetStreamPublisher& publisher,
+                     std::string subject);
     grpc::Status Export(
         grpc::ServerContext* context,
         const opentelemetry::proto::collector::trace::v1::ExportTraceServiceRequest* request,
@@ -28,12 +30,14 @@ class OtlpGrpcServer final {
 
    private:
     jetstream_client::JetStreamPublisher& publisher_;
+    std::string subject_;
   };
 
   class MetricsServiceImpl final
       : public opentelemetry::proto::collector::metrics::v1::MetricsService::Service {
    public:
-    explicit MetricsServiceImpl(jetstream_client::JetStreamPublisher& publisher);
+    MetricsServiceImpl(jetstream_client::JetStreamPublisher& publisher,
+                       std::string subject);
     grpc::Status Export(
         grpc::ServerContext* context,
         const opentelemetry::proto::collector::metrics::v1::ExportMetricsServiceRequest* request,
@@ -41,12 +45,14 @@ class OtlpGrpcServer final {
 
    private:
     jetstream_client::JetStreamPublisher& publisher_;
+    std::string subject_;
   };
 
   class LogsServiceImpl final
       : public opentelemetry::proto::collector::logs::v1::LogsService::Service {
    public:
-    explicit LogsServiceImpl(jetstream_client::JetStreamPublisher& publisher);
+    LogsServiceImpl(jetstream_client::JetStreamPublisher& publisher,
+                    std::string subject);
     grpc::Status Export(
         grpc::ServerContext* context,
         const opentelemetry::proto::collector::logs::v1::ExportLogsServiceRequest* request,
@@ -54,9 +60,14 @@ class OtlpGrpcServer final {
 
    private:
     jetstream_client::JetStreamPublisher& publisher_;
+    std::string subject_;
   };
 
   std::string address_;
+  bool tls_enabled_;
+  std::string tls_cert_file_;
+  std::string tls_key_file_;
+  std::string tls_ca_file_;
   jetstream_client::JetStreamPublisher publisher_;
   TraceServiceImpl trace_service_;
   MetricsServiceImpl metrics_service_;

@@ -363,6 +363,12 @@ class ScopedSpan::Impl {
   explicit Impl(opentelemetry::nostd::shared_ptr<trace_api::Span> span)
       : span_(std::move(span)), scope_(span_) {}
 
+  void End() {
+    if (span_) {
+      span_->End();
+    }
+  }
+
  private:
   opentelemetry::nostd::shared_ptr<trace_api::Span> span_;
   trace_api::Scope scope_;
@@ -376,6 +382,10 @@ ScopedSpan::ScopedSpan(std::string name)
 ScopedSpan::~ScopedSpan() {
   const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - started_at_);
+
+  if (impl_) {
+    impl_->End();
+  }
 
   TelemetryRuntime::Instance().RecordSpanMetrics(static_cast<double>(elapsed.count()));
   TelemetryRuntime::Instance().LogSpan(name_, static_cast<uint64_t>(elapsed.count()));
