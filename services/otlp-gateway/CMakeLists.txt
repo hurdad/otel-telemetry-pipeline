@@ -1,6 +1,7 @@
 add_executable(otlp-gateway
   main.cpp
-  grpc_server.cpp)
+  grpc_server.cpp
+  runtime.cpp)
 
 target_include_directories(otlp-gateway PRIVATE .)
 target_link_libraries(otlp-gateway

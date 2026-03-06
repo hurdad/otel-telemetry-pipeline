@@ -10,6 +10,8 @@
 #include <string>
 #include <thread>
 
+#include "runtime.h"
+
 #include "spdlog/spdlog.h"
 
 namespace {
@@ -77,21 +79,11 @@ int main() {
       return 1;
     }
 
-    std::thread server_thread([&server]() { server.Run(); });
+    const int received_signal = RunServerUntilSignalOrFailure(
+        signal_set, [&server]() { server.Run(); }, [&server]() { server.Shutdown(); });
 
-    int received_signal = 0;
-    if (sigwait(&signal_set, &received_signal) != 0) {
-      spdlog::error("sigwait failed, forcing shutdown");
-      received_signal = SIGTERM;
-    }
     spdlog::info("Received signal {}, shutting down OTLP gateway",
                  received_signal);
-
-    server.Shutdown();
-
-    if (server_thread.joinable()) {
-      server_thread.join();
-    }
 
     return 0;
   } catch (const std::exception &e) {

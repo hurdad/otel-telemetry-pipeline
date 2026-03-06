@@ -1,4 +1,5 @@
 find_package(GTest REQUIRED)
+find_package(Threads REQUIRED)
 
 add_executable(otlp_decoder_tests
   otlp_decoder_test.cpp)
@@ -37,3 +38,13 @@ target_link_libraries(jetstream_client_init_tests PRIVATE
   GTest::gtest
   GTest::gtest_main)
 add_test(NAME jetstream_client_init_tests COMMAND jetstream_client_init_tests)
+
+add_executable(otlp_gateway_runtime_tests
+  otlp_gateway_runtime_tests.cpp
+  ${CMAKE_SOURCE_DIR}/services/otlp-gateway/runtime.cpp)
+target_include_directories(otlp_gateway_runtime_tests PRIVATE ${CMAKE_SOURCE_DIR})
+target_link_libraries(otlp_gateway_runtime_tests PRIVATE
+  GTest::gtest
+  GTest::gtest_main
+  Threads::Threads)
+add_test(NAME otlp_gateway_runtime_tests COMMAND otlp_gateway_runtime_tests)
