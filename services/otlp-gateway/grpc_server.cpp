@@ -2,6 +2,7 @@
 
 #include <grpcpp/grpcpp.h>
 
+#include "export_handler.h"
 #include "telemetry/tracer.h"
 
 namespace {
@@ -18,12 +19,12 @@ grpc::Status OtlpGrpcServer::TraceServiceImpl::Export(
     const opentelemetry::proto::collector::trace::v1::ExportTraceServiceRequest* request,
     opentelemetry::proto::collector::trace::v1::ExportTraceServiceResponse*) {
   auto span = telemetry::StartSpan("grpc_export_traces");
-  std::string payload;
-  request->SerializeToString(&payload);
-  if (!publisher_.Publish(kTraceSubject, payload.data(), payload.size())) {
-    return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Failed to publish traces to NATS");
-  }
-  return grpc::Status::OK;
+  return otlp_gateway::HandleExport(
+      "trace", kTraceSubject, "Failed to publish traces to NATS",
+      [request](std::string* payload) { return request->SerializeToString(payload); },
+      [this](std::string_view subject, const void* data, size_t size) {
+        return publisher_.Publish(std::string(subject), data, size);
+      });
 }
 
 OtlpGrpcServer::MetricsServiceImpl::MetricsServiceImpl(jetstream_client::JetStreamPublisher& publisher)
@@ -34,12 +35,12 @@ grpc::Status OtlpGrpcServer::MetricsServiceImpl::Export(
     const opentelemetry::proto::collector::metrics::v1::ExportMetricsServiceRequest* request,
     opentelemetry::proto::collector::metrics::v1::ExportMetricsServiceResponse*) {
   auto span = telemetry::StartSpan("grpc_export_metrics");
-  std::string payload;
-  request->SerializeToString(&payload);
-  if (!publisher_.Publish(kMetricSubject, payload.data(), payload.size())) {
-    return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Failed to publish metrics to NATS");
-  }
-  return grpc::Status::OK;
+  return otlp_gateway::HandleExport(
+      "metrics", kMetricSubject, "Failed to publish metrics to NATS",
+      [request](std::string* payload) { return request->SerializeToString(payload); },
+      [this](std::string_view subject, const void* data, size_t size) {
+        return publisher_.Publish(std::string(subject), data, size);
+      });
 }
 
 OtlpGrpcServer::LogsServiceImpl::LogsServiceImpl(jetstream_client::JetStreamPublisher& publisher)
@@ -50,12 +51,12 @@ grpc::Status OtlpGrpcServer::LogsServiceImpl::Export(
     const opentelemetry::proto::collector::logs::v1::ExportLogsServiceRequest* request,
     opentelemetry::proto::collector::logs::v1::ExportLogsServiceResponse*) {
   auto span = telemetry::StartSpan("grpc_export_logs");
-  std::string payload;
-  request->SerializeToString(&payload);
-  if (!publisher_.Publish(kLogSubject, payload.data(), payload.size())) {
-    return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Failed to publish logs to NATS");
-  }
-  return grpc::Status::OK;
+  return otlp_gateway::HandleExport(
+      "logs", kLogSubject, "Failed to publish logs to NATS",
+      [request](std::string* payload) { return request->SerializeToString(payload); },
+      [this](std::string_view subject, const void* data, size_t size) {
+        return publisher_.Publish(std::string(subject), data, size);
+      });
 }
 
 OtlpGrpcServer::OtlpGrpcServer(std::string address, std::string nats_url, std::string stream_name)
