@@ -52,6 +52,33 @@ void ensure_stream(natscpp::jetstream &js, const std::string &stream_name,
   }
 }
 
+// Creates a durable pull consumer if it doesn't already exist.
+// Multiple loader instances sharing the same durable name form a consumer
+// group: NATS distributes each pull request across all active instances.
+void ensure_consumer_group(natscpp::jetstream &js, const std::string &stream_name,
+                           const std::string &durable_name,
+                           const std::string &filter_subject) {
+  try {
+    js.get_consumer_group(stream_name, durable_name);
+  } catch (const natscpp::nats_error &e) {
+    if (e.status() == NATS_NOT_FOUND) {
+      js.create_consumer_group({
+          .stream = stream_name,
+          .durable_name = durable_name,
+          .filter_subject = filter_subject,
+          .type = natscpp::js_consumer_type::pull,
+          .ack_policy = natscpp::js_ack_policy::explicit_,
+          .max_ack_pending = 1000,
+          .max_waiting = 512,
+      });
+      std::clog << "JetStream consumer created stream=" << stream_name
+                << " durable=" << durable_name << '\n';
+    } else {
+      throw;
+    }
+  }
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -123,9 +150,12 @@ struct JetStreamConsumer::Impl {
       : conn(natscpp::connection::connect_to(url)), js(conn) {
     ensure_stream(js, stream_name, subs);
     for (const auto &subject : subs) {
-      // Derive a durable consumer name from the subject (dots -> dashes).
+      // Derive a shared durable consumer name from the subject (dots -> dashes).
+      // All loader instances use the same durable name per subject so they form
+      // a consumer group: NATS distributes pull requests across all instances.
       std::string durable = subject;
       std::replace(durable.begin(), durable.end(), '.', '-');
+      ensure_consumer_group(js, stream_name, durable, subject);
       consumers.push_back(js.pull_subscribe(subject, durable));
       subjects.push_back(subject);
     }
